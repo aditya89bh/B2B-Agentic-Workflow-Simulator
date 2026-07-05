@@ -12,6 +12,8 @@ from b2b_workflow_simulator.primitives.event import Event, EventType
 from b2b_workflow_simulator.primitives.task import Task
 from b2b_workflow_simulator.workflow import Workflow
 
+ENGINES = ("simple", "discrete")
+
 
 @dataclass
 class SimulationResult:
@@ -20,6 +22,34 @@ class SimulationResult:
     workflow_name: str
     events: list[Event] = field(default_factory=list)
     kpi: KPIResult = field(default_factory=lambda: KPIResult(workflow_name=""))
+
+
+def choose_next_node(workflow: Workflow, node_id: str, rng: random.Random) -> str:
+    """Pick the next node after `node_id`, weighted by outgoing edge probabilities."""
+    edges = workflow.outgoing_edges(node_id)
+    targets = [edge.target for edge in edges]
+    weights = [edge.probability for edge in edges]
+    return rng.choices(targets, weights=weights, k=1)[0]
+
+
+def record_task_totals(kpi: KPIResult, node_id: str, duration: float, cost: float) -> None:
+    """Add one task's duration and cost into the running KPI totals."""
+    kpi.total_cost += cost
+    kpi.node_total_duration_minutes[node_id] = (
+        kpi.node_total_duration_minutes.get(node_id, 0.0) + duration
+    )
+
+
+def record_actor_utilization(
+    workflow: Workflow, kpi: KPIResult, scheduler: ActorScheduler
+) -> None:
+    """Populate per-actor busy time and utilization from a scheduler's final state."""
+    for actor_id in scheduler.known_actor_ids():
+        actor = workflow.get_actor(actor_id)
+        kpi.actor_busy_minutes[actor_id] = scheduler.busy_minutes(actor_id)
+        kpi.actor_utilization[actor_id] = scheduler.utilization(
+            actor_id, actor.available_hours_per_day
+        )
 
 
 class SimulationRunner:
@@ -41,11 +71,25 @@ class SimulationRunner:
     and cases wait when their assigned actor is busy or out of capacity
     for the day.
 
+    Two execution engines are available via the `engine` argument:
+        "simple" (default): processes each case sequentially, start to
+            finish, before moving to the next. This is fast and exactly
+            matches the simulator's original behavior, but approximates
+            queueing by resolving one case's whole journey before another
+            case that arrived earlier at a shared actor can contend for
+            it.
+        "discrete": processes the entire run through a single
+            chronologically-ordered event queue (see `discrete_event`),
+            so cases sharing actors interleave exactly as they would in
+            real time. This is more faithful under contention but costs
+            more to compute.
+
     A seeded `random.Random` instance is used so runs are reproducible,
     which matters for fair before/after comparisons.
     """
 
     def __init__(self, seed: int | None = None) -> None:
+        self._seed = seed
         self._rng = random.Random(seed)
 
     def run(
@@ -53,6 +97,7 @@ class SimulationRunner:
         workflow: Workflow,
         num_cases: int,
         arrival_interval_minutes: float | None = None,
+        engine: str = "simple",
     ) -> SimulationResult:
         """Simulate `num_cases` cases flowing through `workflow`.
 
@@ -63,6 +108,8 @@ class SimulationRunner:
                 minutes apart and compete for actor capacity, producing
                 queueing and wait time. If omitted, actors are always
                 immediately available (no capacity constraints).
+            engine: Either "simple" (default, backward compatible) or
+                "discrete" to use the chronological event-queue engine.
 
         Returns:
             A `SimulationResult` containing the full event log and the
@@ -72,7 +119,16 @@ class SimulationRunner:
             raise ValueError("num_cases must be a positive integer")
         if arrival_interval_minutes is not None and arrival_interval_minutes < 0:
             raise ValueError("arrival_interval_minutes cannot be negative")
+        if engine not in ENGINES:
+            raise ValueError(f"engine must be one of {ENGINES}, got {engine!r}")
         workflow.validate()
+
+        if engine == "discrete":
+            from b2b_workflow_simulator.discrete_event import DiscreteEventEngine
+
+            return DiscreteEventEngine(seed=self._seed).run(
+                workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+            )
 
         events: list[Event] = []
         kpi = KPIResult(workflow_name=workflow.name)
@@ -87,7 +143,7 @@ class SimulationRunner:
 
         kpi.total_cases = num_cases
         if scheduler is not None:
-            self._record_actor_utilization(workflow, kpi, scheduler)
+            record_actor_utilization(workflow, kpi, scheduler)
 
         return SimulationResult(workflow_name=workflow.name, events=events, kpi=kpi)
 
@@ -126,6 +182,17 @@ class SimulationRunner:
                 kpi.actor_wait_minutes[actor.actor_id] = (
                     kpi.actor_wait_minutes.get(actor.actor_id, 0.0) + wait
                 )
+                if wait > 0:
+                    events.append(
+                        Event(
+                            EventType.TASK_QUEUED,
+                            clock,
+                            case_id,
+                            node.node_id,
+                            actor.actor_id,
+                            {"wait_minutes": wait},
+                        )
+                    )
             else:
                 start, end = clock, clock + duration
 
@@ -136,7 +203,7 @@ class SimulationRunner:
 
             if self._rng.random() < actor.error_rate:
                 task.mark_failed(duration, cost, reason="actor_error")
-                self._record_task_totals(kpi, node.node_id, duration, cost)
+                record_task_totals(kpi, node.node_id, duration, cost)
                 kpi.node_failure_counts[node.node_id] = (
                     kpi.node_failure_counts.get(node.node_id, 0) + 1
                 )
@@ -150,6 +217,12 @@ class SimulationRunner:
                         {"reason": "actor_error"},
                     )
                 )
+                if scheduler is not None:
+                    events.append(
+                        Event(
+                            EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id
+                        )
+                    )
                 events.append(Event(EventType.CASE_FAILED, end, case_id))
                 kpi.failed_cases += 1
                 kpi.total_duration_minutes += end - arrival_time
@@ -167,7 +240,11 @@ class SimulationRunner:
                     Event(EventType.TASK_COMPLETED, end, case_id, node.node_id, actor.actor_id)
                 )
 
-            self._record_task_totals(kpi, node.node_id, duration, cost)
+            record_task_totals(kpi, node.node_id, duration, cost)
+            if scheduler is not None:
+                events.append(
+                    Event(EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id)
+                )
 
             if node.is_terminal:
                 events.append(Event(EventType.CASE_COMPLETED, end, case_id))
@@ -176,31 +253,7 @@ class SimulationRunner:
                 return
 
             clock = end
-            current_node_id = self._choose_next_node(workflow, node.node_id)
-
-    def _choose_next_node(self, workflow: Workflow, node_id: str) -> str:
-        edges = workflow.outgoing_edges(node_id)
-        targets = [edge.target for edge in edges]
-        weights = [edge.probability for edge in edges]
-        return self._rng.choices(targets, weights=weights, k=1)[0]
-
-    @staticmethod
-    def _record_task_totals(kpi: KPIResult, node_id: str, duration: float, cost: float) -> None:
-        kpi.total_cost += cost
-        kpi.node_total_duration_minutes[node_id] = (
-            kpi.node_total_duration_minutes.get(node_id, 0.0) + duration
-        )
-
-    @staticmethod
-    def _record_actor_utilization(
-        workflow: Workflow, kpi: KPIResult, scheduler: ActorScheduler
-    ) -> None:
-        for actor_id in scheduler.known_actor_ids():
-            actor = workflow.get_actor(actor_id)
-            kpi.actor_busy_minutes[actor_id] = scheduler.busy_minutes(actor_id)
-            kpi.actor_utilization[actor_id] = scheduler.utilization(
-                actor_id, actor.available_hours_per_day
-            )
+            current_node_id = choose_next_node(workflow, node.node_id, self._rng)
 
 
-__all__ = ["SimulationRunner", "SimulationResult"]
+__all__ = ["SimulationRunner", "SimulationResult", "ENGINES"]
