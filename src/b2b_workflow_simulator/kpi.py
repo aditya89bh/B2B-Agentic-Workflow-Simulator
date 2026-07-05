@@ -35,6 +35,12 @@ class KPIResult:
             keyed by actor_id.
         actor_utilization: Fraction (0.0-1.0+) of each actor's available
             capacity that was consumed, keyed by actor_id.
+        pool_utilization: Fraction (0.0-1.0+) of each `ActorPool`'s
+            aggregate worker capacity that was consumed, keyed by
+            pool actor_id. Populated whenever a node routes work through
+            an `ActorPool` rather than a single actor.
+        worker_utilization: Per-worker utilization within each pool,
+            keyed first by pool actor_id and then by worker_id.
     """
 
     workflow_name: str
@@ -51,6 +57,8 @@ class KPIResult:
     actor_busy_minutes: dict[str, float] = field(default_factory=dict)
     actor_wait_minutes: dict[str, float] = field(default_factory=dict)
     actor_utilization: dict[str, float] = field(default_factory=dict)
+    pool_utilization: dict[str, float] = field(default_factory=dict)
+    worker_utilization: dict[str, dict[str, float]] = field(default_factory=dict)
 
     @property
     def completion_rate(self) -> float:
