@@ -39,6 +39,7 @@ from b2b_workflow_simulator.report import (
     format_metric_value,
     format_percent_change,
 )
+from b2b_workflow_simulator.risk import CATEGORIES, CATEGORY_LABELS, RiskAssessment
 from b2b_workflow_simulator.sensitivity_grid import SensitivityGridResult
 from b2b_workflow_simulator.sla import SLAReport
 
@@ -576,6 +577,48 @@ def render_sla_html(report: SLAReport) -> str:
     return _page(f"{report.workflow_name} - SLA Report", body)
 
 
+def _risk_category_table(assessment: RiskAssessment) -> str:
+    rows = "".join(
+        f"<tr><td>{_escape(CATEGORY_LABELS[category])}</td>"
+        f"<td>{assessment.category_scores.get(category, 0.0):.1f}/100</td></tr>"
+        for category in CATEGORIES
+    )
+    return f"<table>\n  <tr><th>Category</th><th>Score</th></tr>\n{rows}\n</table>"
+
+
+def _risk_factor_list(assessment: RiskAssessment) -> str:
+    if not assessment.factors:
+        return "<p>No risk factors identified.</p>"
+    sections = []
+    for category in CATEGORIES:
+        factors = assessment.factors_for(category)
+        if not factors:
+            continue
+        items = "".join(
+            f"<li>{_escape(factor.description)} (weight: {factor.weight:.1f})</li>"
+            for factor in sorted(factors, key=lambda f: f.weight, reverse=True)
+        )
+        sections.append(f"<h3>{_escape(CATEGORY_LABELS[category])}</h3><ul>{items}</ul>")
+    return "".join(sections)
+
+
+def render_risk_html(assessment: RiskAssessment) -> str:
+    """Render a `RiskAssessment` as a standalone HTML organizational risk report."""
+    body = f"""
+  <h1>Organizational Risk Assessment</h1>
+  <p class="subtitle">{_escape(assessment.workflow_name)}</p>
+
+  <p class="callout"><strong>Overall risk score: {assessment.overall_score:.1f}/100</strong></p>
+
+  <h2>Category Scores</h2>
+  {_risk_category_table(assessment)}
+
+  <h2>Risk Factors</h2>
+  {_risk_factor_list(assessment)}
+"""
+    return _page(f"{assessment.workflow_name} - Risk Assessment", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -587,4 +630,5 @@ __all__ = [
     "render_policy_html",
     "render_compliance_html",
     "render_sla_html",
+    "render_risk_html",
 ]
