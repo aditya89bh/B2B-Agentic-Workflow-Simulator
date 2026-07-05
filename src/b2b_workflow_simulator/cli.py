@@ -7,6 +7,8 @@ import sys
 
 from b2b_workflow_simulator.examples import invoice_processing, sales_lead_qualification
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.redesign import compare_workflows
+from b2b_workflow_simulator.report import generate_report
 from b2b_workflow_simulator.simulation import SimulationRunner
 
 EXAMPLES = {
@@ -53,19 +55,41 @@ def _print_kpi_table(before: KPIResult, after: KPIResult) -> None:
         print(f"{label:<{label_width}}  {before_value:>{col_width}}  {after_value:>{col_width}}")
 
 
-def run_example(example_name: str, num_cases: int, seed: int | None) -> int:
-    """Run the before/after variants of a bundled example and print a KPI comparison."""
+def _run_before_after(
+    example_name: str,
+    num_cases: int,
+    seed: int | None,
+    arrival_interval_minutes: float | None = None,
+):
+    """Build and simulate both variants of a bundled example.
+
+    Returns a `(before_workflow, after_workflow, before_result, after_result)`
+    tuple, or `None` (after printing an error) if `example_name` is unknown.
+    """
     if example_name not in EXAMPLES:
         available = ", ".join(sorted(EXAMPLES))
-        print(f"Unknown example '{example_name}'. Available examples: {available}", file=sys.stderr)
-        return 1
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return None
 
     build_before, build_after = EXAMPLES[example_name]
     before_workflow = build_before()
     after_workflow = build_after()
 
-    before_result = SimulationRunner(seed=seed).run(before_workflow, num_cases)
-    after_result = SimulationRunner(seed=seed).run(after_workflow, num_cases)
+    before_result = SimulationRunner(seed=seed).run(
+        before_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+    )
+    after_result = SimulationRunner(seed=seed).run(
+        after_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+    )
+    return before_workflow, after_workflow, before_result, after_result
+
+
+def run_example(example_name: str, num_cases: int, seed: int | None) -> int:
+    """Run the before/after variants of a bundled example and print a KPI comparison."""
+    outcome = _run_before_after(example_name, num_cases, seed)
+    if outcome is None:
+        return 1
+    before_workflow, after_workflow, before_result, after_result = outcome
 
     print(f"Example: {example_name}")
     print(f"Cases per variant: {num_cases}")
@@ -74,6 +98,24 @@ def run_example(example_name: str, num_cases: int, seed: int | None) -> int:
     print(f"After:  {after_workflow.name}")
     print()
     _print_kpi_table(before_result.kpi, after_result.kpi)
+    return 0
+
+
+def compare_example(
+    example_name: str,
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+) -> int:
+    """Run both variants of a bundled example and print a full ROI report."""
+    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes)
+    if outcome is None:
+        return 1
+    _before_workflow, _after_workflow, before_result, after_result = outcome
+
+    diff = compare_workflows(before_result.kpi, after_result.kpi, implementation_cost)
+    print(generate_report(diff))
     return 0
 
 
@@ -105,6 +147,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Random seed for reproducible results (default: 42).",
     )
 
+    compare_parser = subparsers.add_parser(
+        "compare-example",
+        help="Run a bundled example and print a full before/after ROI report.",
+    )
+    compare_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    compare_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per variant (default: 200).",
+    )
+    compare_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    compare_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time cost of implementing the redesign, for payback analysis.",
+    )
+    compare_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+
     return parser
 
 
@@ -114,6 +190,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run-example":
         return run_example(args.name, args.cases, args.seed)
+
+    if args.command == "compare-example":
+        return compare_example(
+            args.name, args.cases, args.seed, args.implementation_cost, args.arrival_interval
+        )
 
     parser.print_help()
     return 1
