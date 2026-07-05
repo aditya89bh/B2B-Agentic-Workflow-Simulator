@@ -18,6 +18,7 @@ from b2b_workflow_simulator.capacity_planning import (
     CapacityPlan,
     HiringSimulationResult,
 )
+from b2b_workflow_simulator.compliance import ComplianceReport
 from b2b_workflow_simulator.monte_carlo import (
     COMPARISON_METRICS,
     KPI_METRICS,
@@ -492,6 +493,55 @@ def render_policy_html(evaluation: PolicyEvaluation) -> str:
     return _page(f"{evaluation.workflow_name} - Policy Compliance", body)
 
 
+def _compliance_violation_table(report: ComplianceReport) -> str:
+    if not report.violations:
+        return "<p>No violations to report.</p>"
+    rows = [
+        "<tr>"
+        f"<td>{_escape(v.requirement_name)}</td>"
+        f"<td>{_escape(v.requirement_kind)}</td>"
+        f'<td class="region-negative">{_escape(v.node_id or "-")}</td>'
+        f"<td>{_escape(v.description)}</td>"
+        "</tr>"
+        for v in report.violations
+    ]
+    return (
+        "<table>\n"
+        "  <tr><th>Requirement</th><th>Kind</th><th>Node</th><th>Description</th></tr>\n"
+        + "\n".join(rows)
+        + "\n</table>"
+    )
+
+
+def _compliance_findings_list(report: ComplianceReport) -> str:
+    if not report.audit_findings:
+        return "<p>No audit findings recorded.</p>"
+    items = "".join(
+        f"<li><strong>{_escape(f.requirement_name)}</strong>: {_escape(f.finding)}</li>"
+        for f in report.audit_findings
+    )
+    return f"<ul>{items}</ul>"
+
+
+def render_compliance_html(report: ComplianceReport) -> str:
+    """Render a `ComplianceReport` as a standalone HTML audit-ready report."""
+    body = f"""
+  <h1>Compliance Analysis</h1>
+  <p class="subtitle">{_escape(report.workflow_name)} &mdash;
+  {report.requirements_checked} requirement(s) checked</p>
+
+  <p class="callout"><strong>Compliance score: {report.compliance_score:.1f}%</strong>
+  &mdash; {report.violation_count} violation(s)</p>
+
+  <h2>Violations</h2>
+  {_compliance_violation_table(report)}
+
+  <h2>Audit Findings</h2>
+  {_compliance_findings_list(report)}
+"""
+    return _page(f"{report.workflow_name} - Compliance Report", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -501,4 +551,5 @@ __all__ = [
     "render_capacity_html",
     "render_hiring_html",
     "render_policy_html",
+    "render_compliance_html",
 ]
