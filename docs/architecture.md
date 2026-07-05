@@ -29,10 +29,19 @@ sensitivity.py        Parameter sweeps over a before/after pair, break-even dete
 sensitivity_grid.py   Two-parameter sensitivity grids, ROI/region classification
 monte_carlo.py        Repeated seeded runs, percentile statistics, variability reports
 capacity_planning.py  Staffing recommendations and hiring simulation
+multi_resource.py     Synchronized scheduling for tasks needing several actors at once
+policy.py             Business policy engine: governance rules checked against workflow structure
+compliance.py         Compliance engine: regulatory/audit requirements and audit findings
+sla.py                SLA engine: deadline tracking and breach analysis over an event log
+risk.py               Organizational risk engine: category scores and explainable risk factors
+recommendation.py     Recommendation engine: actionable, reasoned suggestions
+ai_adoption.py        AI adoption readiness scoring and rollout recommendation
+executive_report.py   Bundles every analysis above into one executive assessment report
 report.py             Plain-text rendering of a RedesignDiff or WorkflowPortfolio
 html_report.py        Static HTML rendering of all report types
 export.py             JSON/CSV serialization of events, KPIs, and diffs
 examples/             Concrete, business-realistic Workflow instances + sample JSON
+                      (including examples/governance.py: policy/compliance/SLA definitions)
 cli.py                Thin argument-parsing layer over the above
 ```
 
@@ -63,11 +72,31 @@ depend on `simulation.py` and `redesign.py`, since each has to actually
 re-run the simulation (once per swept value, once per grid cell, or
 once per seed, respectively) to observe how outcomes change.
 `capacity_planning.py` depends on `kpi.py`, `pool.py`, `queueing.py`,
-and `simulation.py`. `report.py` and `html_report.py` depend on
-`redesign.py`, `portfolio.py`, `monte_carlo.py`, `sensitivity_grid.py`,
-and `capacity_planning.py`, and `export.py` depends on `redesign.py`
-(and `kpi.py`/`primitives`), keeping "how we compute results" fully
-separate from "how we present them."
+and `simulation.py`. `multi_resource.py` depends on `primitives`,
+`capacity.py`, and `pool.py`, sharing their scheduling primitives so a
+multi-resource task's participants are reserved through the exact same
+calendars single-actor and pooled tasks use. `policy.py` and
+`compliance.py` each depend only on `workflow.py` (and, for
+`BusinessHoursPolicy`, `pool.py`), since every check they perform is
+structural -- no simulation is required to evaluate a policy or
+compliance requirement. `sla.py` depends on `simulation.py` (specifically
+`SimulationResult`) instead, since SLA attainment is checked against an
+event log from an actual run. `risk.py` depends on `kpi.py`, `policy.py`,
+`compliance.py`, `pool.py`, and `workflow.py`, combining structural and
+simulated signals into one risk picture; its `policy_evaluation` and
+`compliance_report` parameters are optional so risk can still be computed
+for a workflow with no governance data attached. `recommendation.py`
+depends on `kpi.py`, `risk.py`, and `workflow.py`. `ai_adoption.py`
+depends on `kpi.py`, `policy.py`, and `workflow.py`.
+`executive_report.py` depends on all of the above plus `redesign.py`,
+orchestrating every Phase 5 engine into one bundled result without
+introducing a new computation path of its own. `report.py` and
+`html_report.py` depend on `redesign.py`, `portfolio.py`,
+`monte_carlo.py`, `sensitivity_grid.py`, `capacity_planning.py`,
+`policy.py`, `compliance.py`, `sla.py`, `risk.py`, `recommendation.py`,
+`ai_adoption.py`, and `executive_report.py`, and `export.py` depends on
+`redesign.py` (and `kpi.py`/`primitives`), keeping "how we compute
+results" fully separate from "how we present them."
 
 ## Node and Edge: the graph
 
@@ -271,6 +300,74 @@ specific hire relieves the queueing pressure it is meant to relieve,
 rather than trusting a headcount formula in isolation. See
 `docs/capacity_planning.md`.
 
+## Multi-resource tasks
+
+`Node.additional_actor_ids` lets a task require more than one actor (or
+pool) simultaneously -- e.g. a Manager-and-Legal sign-off. Both engines
+detect this and delegate to `multi_resource.schedule_multi_resource_execution()`,
+which finds the joint time every participant is free, reserves that slot
+on each of their calendars, and sums their costs, while the primary actor
+(`Node.actor_id`) still determines the task's visible duration, error rate,
+and escalation behavior -- keeping single-actor workflows byte-for-byte
+unaffected. The extra wait synchronization adds beyond the fastest
+participant's own availability is tracked separately as coordination delay
+on `KPIResult`. See `docs/team_capacity.md`.
+
+## Governance: policies and compliance
+
+Where the rest of the engine answers "what happens," `policy.py` and
+`compliance.py` answer "is what happens allowed to happen this way,"
+checked against a workflow's structure independent of any simulation run.
+`policy.py` models internal governance rules an organization chooses to
+enforce (approval gates, routing restrictions, escalation paths, retry
+safety, business hours, mandatory human review, separation of duties);
+`compliance.py` models external regulatory/audit obligations (GDPR-style
+consent gates, financial approval chains, segregation of duties, mandatory
+documentation, record retention, regulatory checkpoints) and additionally
+produces informational `AuditFinding` records alongside hard violations.
+Both are plain dataclasses evaluated by a single dispatch function
+(`evaluate_policies`/`evaluate_compliance`) against a `Workflow`, following
+the same "data in, structured result out" shape as everything else in this
+codebase. See `docs/policy_engine.md` and `docs/compliance.md`.
+
+## SLA tracking
+
+`sla.py` is the one governance-adjacent engine that checks a simulation's
+*actual timing* rather than workflow structure: `CompletionSLA`,
+`ResponseSLA`, and `EscalationSLA` rules are replayed against a
+`SimulationResult`'s event log, per case, to compute attainment rate,
+breach count, average breach duration, breach causes, and an optional
+estimated financial penalty. See `docs/sla_modeling.md`.
+
+## Organizational risk, recommendations, and AI adoption
+
+`risk.py` scores a workflow across six categories (operational, compliance,
+AI failure, staffing, process complexity, single point of failure),
+combining KPI signals, workflow structure, and optional policy/compliance
+results into an overall score backed by an explainable list of
+`RiskFactor` records. `recommendation.py` turns those signals (plus its
+own independent heuristics) into a prioritized list of actionable
+`Recommendation` objects, each required to carry reasoning, affected KPIs,
+an expected benefit, and a confidence level. `ai_adoption.py` scores six
+different dimensions specific to AI rollout decisions (automation
+readiness, AI maturity, human dependency, governance, explainability,
+rollout complexity) into a single readiness index and a categorical
+recommendation (pilot, phased rollout, full deployment, not recommended).
+See `docs/risk_engine.md`, `docs/recommendation_engine.md`, and
+`docs/ai_adoption.md`.
+
+## Executive assessment report
+
+`executive_report.py` is the top of the reporting stack: `build_executive_assessment()`
+runs the risk and AI adoption engines (and, given supplied results, folds
+in ROI, SLA, compliance, and policy sections) into one `ExecutiveAssessment`,
+and `generate_executive_report()`/`render_executive_html()` render it as a
+single plain-text or HTML document combining KPI summary, ROI, SLA
+performance, compliance, policy violations, organizational risk,
+recommendations, and AI adoption -- the same underlying data every other
+report type in this codebase renders, assembled into the one document an
+executive sponsor actually needs to read. See `docs/ai_adoption.md`.
+
 ## What this codebase deliberately leaves out
 
 - A web UI or a GUI workflow authoring tool (JSON persistence supports
@@ -282,6 +379,14 @@ rather than trusting a headcount formula in isolation. See
 - Optimization across multiple simultaneous staffing decisions (each
   sensitivity grid or hiring simulation evaluates one scenario at a
   time; comparing several means running the function once per scenario).
+- A built-in library of named regulations (GDPR, SOX, HIPAA, etc.) --
+  `compliance.py` models the *shapes* these obligations commonly take
+  (consent gates, approval chains, segregation of duties, retention,
+  checkpoints), not a database of jurisdiction-specific rules.
+- Enforcing policies, compliance requirements, or SLAs during simulation
+  itself -- all three are evaluated after the fact, against a workflow's
+  structure or a completed run's event log, rather than changing
+  scheduling decisions while a simulation is in progress.
 
 These remain natural extensions for later phases once the current
 models have proven themselves on more examples.
