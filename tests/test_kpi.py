@@ -12,6 +12,9 @@ def test_kpi_defaults_are_zero():
     assert kpi.bottleneck_nodes() == []
     assert kpi.pool_utilization == {}
     assert kpi.worker_utilization == {}
+    assert kpi.total_coordination_delay_minutes == 0.0
+    assert kpi.node_coordination_delay_minutes == {}
+    assert kpi.multi_resource_task_count == 0
 
 
 def test_kpi_rates_are_computed_correctly():
