@@ -9,6 +9,7 @@ from b2b_workflow_simulator.html_report import (
     render_monte_carlo_html,
     render_policy_html,
     render_portfolio_html,
+    render_risk_html,
     render_sensitivity_grid_html,
     render_sla_html,
 )
@@ -23,6 +24,7 @@ from b2b_workflow_simulator.primitives.human import HumanActor
 from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.primitives.worker import Worker
 from b2b_workflow_simulator.redesign import compare_workflows
+from b2b_workflow_simulator.risk import compute_risk
 from b2b_workflow_simulator.sensitivity_grid import run_sensitivity_grid
 from b2b_workflow_simulator.simulation import SimulationResult
 from b2b_workflow_simulator.sla import CompletionSLA, evaluate_sla
@@ -167,9 +169,7 @@ def test_render_portfolio_html_handles_empty_portfolio():
 
 def build_mc_workflow(name: str = "Monte Carlo Test <script>") -> Workflow:
     workflow = Workflow(workflow_id="mc-test", name=name, entry_node_id="review")
-    workflow.add_actor(
-        HumanActor(actor_id="agent", name="Agent", hourly_cost=30.0, error_rate=0.1)
-    )
+    workflow.add_actor(HumanActor(actor_id="agent", name="Agent", hourly_cost=30.0, error_rate=0.1))
     workflow.add_node(
         Node(
             node_id="review",
@@ -305,8 +305,7 @@ def test_render_sensitivity_grid_html_marks_unstable_cells():
 def build_pool_workflow(num_workers: int = 1) -> Workflow:
     workflow = Workflow(workflow_id="wf", name="Pooled <b>Team</b>", entry_node_id="handle")
     workers = [
-        Worker(worker_id=f"w{i}", name=f"Worker {i}", hourly_cost=40.0)
-        for i in range(num_workers)
+        Worker(worker_id=f"w{i}", name=f"Worker {i}", hourly_cost=40.0) for i in range(num_workers)
     ]
     workflow.add_actor(ActorPool(actor_id="team", name="Support Team", workers=workers))
     workflow.add_node(
@@ -500,3 +499,45 @@ def test_render_sla_html_omits_penalty_line_when_not_configured():
 
     assert "Attainment rate: 100.0%" in output
     assert "Estimated financial penalty" not in output
+
+
+def build_risk_workflow() -> Workflow:
+    workflow = Workflow(workflow_id="wf", name="Risky <script>", entry_node_id="intake")
+    workflow.add_actor(HumanActor(actor_id="clerk", name="Clerk"))
+    workflow.add_node(Node(node_id="intake", name="Intake", actor_id="clerk", is_terminal=True))
+    return workflow
+
+
+def test_render_risk_html_is_well_formed_document():
+    workflow = build_risk_workflow()
+    kpi = KPIResult(workflow_name=workflow.name, total_cases=10, completed_cases=4, failed_cases=6)
+
+    assessment = compute_risk(workflow, kpi)
+    output = render_risk_html(assessment)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_risk_html_includes_overall_score_and_categories():
+    workflow = build_risk_workflow()
+    kpi = KPIResult(workflow_name=workflow.name, total_cases=10, completed_cases=4, failed_cases=6)
+
+    assessment = compute_risk(workflow, kpi)
+    output = render_risk_html(assessment)
+
+    assert "Overall risk score" in output
+    assert "Operational" in output
+    assert "Single Point of Failure" in output
+
+
+def test_render_risk_html_handles_no_factors():
+    workflow = build_risk_workflow()
+    kpi = KPIResult(workflow_name=workflow.name, total_cases=10, completed_cases=10)
+
+    assessment = compute_risk(workflow, kpi)
+    output = render_risk_html(assessment)
+
+    assert "No risk factors identified." in output
