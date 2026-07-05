@@ -10,6 +10,8 @@ def test_kpi_defaults_are_zero():
     assert kpi.avg_cost_per_case == 0.0
     assert kpi.avg_cycle_time_minutes == 0.0
     assert kpi.bottleneck_nodes() == []
+    assert kpi.pool_utilization == {}
+    assert kpi.worker_utilization == {}
 
 
 def test_kpi_rates_are_computed_correctly():
