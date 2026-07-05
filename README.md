@@ -56,6 +56,21 @@ with an ROI and payback analysis, and a **report generator** renders
 that diff as a plain-text report for non-technical stakeholders (see
 `docs/redesign_analysis.md`).
 
+Beyond a single workflow, a **`WorkflowPortfolio`** aggregates several
+redesign diffs together, ranks them by transformation value, and rolls
+up combined ROI, cost savings, and payback so a transformation program
+covering multiple processes can be prioritized (see
+`docs/portfolio_analysis.md`). A **sensitivity sweep engine** re-runs a
+before/after pair while varying one assumption at a time (AI error
+rate, AI cost, human hourly cost, arrival interval, implementation
+cost) to find the break-even point where a redesign stops paying off
+(see `docs/sensitivity_analysis.md`). Workflow definitions can be
+persisted as JSON with lightweight structural validation, so they can
+be authored, shared, or version-controlled outside of Python code (see
+`docs/json_workflows.md`). Both a single redesign diff and a full
+portfolio can also be rendered as a clean, self-contained HTML report
+for sharing with stakeholders who won't run the CLI.
+
 ## Bundled examples
 
 ### Sales lead qualification
@@ -86,6 +101,23 @@ Invoice Intake -> Validation -> Approval -> ERP Entry -> Payment Scheduling
   AP Specialist, keeping a human firmly in the loop for anything the
   agents cannot confidently resolve.
 
+### Customer support ticket resolution
+
+```
+Ticket Intake -> Triage -> Response Drafting -> Follow-Up
+                    \\              \\-> Low-Confidence Response
+                     \\-> Escalation -> Follow-Up
+                     \\-> Wrong Classification         \\-> Delayed Escalation
+                     \\-> Missing Customer Context
+```
+
+- **Before**: a Support Agent triages, drafts responses to, and follows
+  up on every ticket; a Specialist handles escalations.
+- **After**: AI agents triage tickets and draft responses end to end; a
+  new Support Reviewer role approves or corrects AI output on complex
+  or low-confidence cases; the Specialist is reserved purely for
+  genuine escalations.
+
 ## Command-line usage
 
 ```bash
@@ -102,6 +134,22 @@ b2b-simulator compare-example sales-lead-qualification --arrival-interval 15
 
 # Export event logs, KPI summaries, and the comparison to disk.
 b2b-simulator export-example invoice-processing --format json --output-dir exports
+
+# Run several bundled examples together and print a per-workflow summary.
+b2b-simulator run-portfolio sales-lead-qualification invoice-processing customer-support-ticket-resolution
+
+# Full portfolio report: ranking, aggregate ROI/payback, risks, rollout order.
+b2b-simulator compare-portfolio sales-lead-qualification invoice-processing --implementation-cost 5000
+
+# Sweep an assumption and find the break-even point.
+b2b-simulator sensitivity-example invoice-processing --parameter ai_cost_per_execution --values 0,5,10,20
+
+# Save/load a workflow definition as JSON.
+b2b-simulator save-example invoice-processing --output-dir workflows
+b2b-simulator load-example workflows/invoice-processing-after.json
+
+# Write a static, shareable HTML redesign report.
+b2b-simulator html-report-example invoice-processing --output report.html
 ```
 
 Example `run-example` output:
@@ -142,25 +190,35 @@ python -m build
 src/b2b_workflow_simulator/
     primitives/          Node, Edge, Actor, HumanActor, AIAgentActor, Task, Event, DurationModel
     workflow.py           Workflow graph model with validation
-    capacity.py            ActorScheduler: queueing and daily capacity limits
-    kpi.py                 KPIResult aggregation object
-    simulation.py           SimulationRunner
-    redesign.py              Redesign diff engine (before/after comparison, ROI, payback)
-    report.py                 Plain-text ROI report generator
-    export.py                  JSON/CSV export for events, KPIs, and comparisons
-    examples/                   Bundled example workflows
-    cli.py                       Command-line entry point
+    workflow_io.py          JSON persistence + stdlib schema validation for workflows
+    capacity.py               ActorScheduler: queueing and daily capacity limits
+    kpi.py                     KPIResult aggregation object
+    simulation.py                SimulationRunner
+    redesign.py                    Redesign diff engine (before/after comparison, ROI, payback)
+    portfolio.py                     WorkflowPortfolio: multi-workflow aggregation and ranking
+    sensitivity.py                     Sweep engine and break-even detection
+    report.py                            Plain-text ROI and portfolio report generators
+    html_report.py                         Static HTML report renderer
+    export.py                                JSON/CSV export for events, KPIs, and comparisons
+    examples/                                   Bundled example workflows + sample JSON definitions
+    cli.py                                        Command-line entry point
 tests/                    Unit tests for every module above
-docs/                     Architecture, capacity modeling, and redesign analysis documentation
+docs/                     Architecture, capacity modeling, redesign analysis, portfolio analysis,
+                          sensitivity analysis, and JSON workflow documentation
 ```
 
 ## Status
 
 Phase 1 established the core domain model, a working simulation runner,
-and a single business example end to end. Phase 2 adds capacity-aware
+and a single business example end to end. Phase 2 added capacity-aware
 queueing, realistic duration variance, a structured redesign diff engine
 with ROI/payback analysis, plain-text reporting, JSON/CSV export, and a
-second business example (invoice processing).
+second business example (invoice processing). Phase 3 adds a third
+business example (customer support ticket resolution), a workflow
+portfolio model for evaluating multiple redesigns together, a
+sensitivity/break-even sweep engine, JSON persistence for workflow
+definitions, and static HTML reports for both single-workflow and
+portfolio results.
 
 ## License
 
