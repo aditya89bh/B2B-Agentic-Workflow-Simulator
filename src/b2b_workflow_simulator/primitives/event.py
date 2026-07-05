@@ -7,13 +7,22 @@ from enum import Enum
 
 
 class EventType(str, Enum):
-    """Categories of events emitted by the simulation runner."""
+    """Categories of events emitted by the simulation runner.
+
+    `TASK_QUEUED` and `RESOURCE_RELEASED` are only emitted in
+    capacity-aware runs (an `arrival_interval_minutes` or `arrival_model`
+    was supplied): `TASK_QUEUED` marks a case waiting for a busy or
+    over-capacity actor, and `RESOURCE_RELEASED` marks the moment an
+    actor becomes free again after finishing a task.
+    """
 
     CASE_STARTED = "case_started"
+    TASK_QUEUED = "task_queued"
     TASK_STARTED = "task_started"
     TASK_COMPLETED = "task_completed"
     TASK_FAILED = "task_failed"
     TASK_ESCALATED = "task_escalated"
+    RESOURCE_RELEASED = "resource_released"
     CASE_COMPLETED = "case_completed"
     CASE_FAILED = "case_failed"
 
