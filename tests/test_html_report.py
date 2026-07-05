@@ -10,6 +10,7 @@ from b2b_workflow_simulator.html_report import (
     render_policy_html,
     render_portfolio_html,
     render_sensitivity_grid_html,
+    render_sla_html,
 )
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.monte_carlo import run_monte_carlo, run_monte_carlo_comparison
@@ -17,11 +18,14 @@ from b2b_workflow_simulator.policy import SeparationOfDutiesPolicy, evaluate_pol
 from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
+from b2b_workflow_simulator.primitives.event import Event, EventType
 from b2b_workflow_simulator.primitives.human import HumanActor
 from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.primitives.worker import Worker
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.sensitivity_grid import run_sensitivity_grid
+from b2b_workflow_simulator.simulation import SimulationResult
+from b2b_workflow_simulator.sla import CompletionSLA, evaluate_sla
 from b2b_workflow_simulator.workflow import Workflow
 
 
@@ -452,3 +456,47 @@ def test_render_compliance_html_for_fully_compliant_workflow():
 
     assert "Compliance score: 100.0%" in output
     assert "No violations to report" in output
+
+
+def build_sla_result():
+    events = [
+        Event(EventType.CASE_STARTED, 0.0, "case-1"),
+        Event(EventType.CASE_COMPLETED, 90.0, "case-1"),
+    ]
+    return SimulationResult(workflow_name="Ops <script>", events=events)
+
+
+def test_render_sla_html_is_well_formed_document():
+    result = build_sla_result()
+    rule = CompletionSLA(name="fast-resolution", deadline_minutes=60.0, penalty_per_minute=5.0)
+    report = evaluate_sla(result, [rule])
+
+    output = render_sla_html(report)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_sla_html_includes_attainment_and_penalty():
+    result = build_sla_result()
+    rule = CompletionSLA(name="fast-resolution", deadline_minutes=60.0, penalty_per_minute=5.0)
+    report = evaluate_sla(result, [rule])
+
+    output = render_sla_html(report)
+
+    assert "Attainment rate: 0.0%" in output
+    assert "$150.00" in output
+    assert "fast-resolution" in output
+
+
+def test_render_sla_html_omits_penalty_line_when_not_configured():
+    result = build_sla_result()
+    rule = CompletionSLA(name="fast-resolution", deadline_minutes=120.0)
+    report = evaluate_sla(result, [rule])
+
+    output = render_sla_html(report)
+
+    assert "Attainment rate: 100.0%" in output
+    assert "Estimated financial penalty" not in output
