@@ -53,3 +53,55 @@ def test_node_metadata_is_independent_per_instance():
     first.metadata["key"] = "value"
 
     assert second.metadata == {}
+
+
+def test_node_defaults_to_single_resource():
+    node = Node(node_id="intake", name="Lead Intake", actor_id="sdr")
+
+    assert node.additional_actor_ids == ()
+    assert node.is_multi_resource is False
+    assert node.required_actor_ids == ("sdr",)
+
+
+def test_node_accepts_additional_actor_ids():
+    node = Node(
+        node_id="contract_review",
+        name="Contract Review",
+        actor_id="manager",
+        additional_actor_ids=("legal",),
+    )
+
+    assert node.additional_actor_ids == ("legal",)
+    assert node.is_multi_resource is True
+    assert node.required_actor_ids == ("manager", "legal")
+
+
+def test_node_normalizes_list_of_additional_actor_ids_to_tuple():
+    node = Node(
+        node_id="contract_review",
+        name="Contract Review",
+        actor_id="manager",
+        additional_actor_ids=["legal", "finance"],
+    )
+
+    assert node.additional_actor_ids == ("legal", "finance")
+
+
+def test_node_rejects_empty_additional_actor_id():
+    with pytest.raises(ValueError, match="additional_actor_ids"):
+        Node(node_id="a", name="A", actor_id="manager", additional_actor_ids=("",))
+
+
+def test_node_rejects_primary_actor_repeated_in_additional_actor_ids():
+    with pytest.raises(ValueError, match="additional_actor_ids"):
+        Node(node_id="a", name="A", actor_id="manager", additional_actor_ids=("manager",))
+
+
+def test_node_rejects_duplicate_additional_actor_ids():
+    with pytest.raises(ValueError, match="additional_actor_ids"):
+        Node(
+            node_id="a",
+            name="A",
+            actor_id="manager",
+            additional_actor_ids=("legal", "legal"),
+        )
