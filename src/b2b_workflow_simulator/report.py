@@ -8,7 +8,7 @@ _PERCENT_METRICS = {"Completion rate", "Failure rate", "Escalation rate"}
 _CURRENCY_METRICS = {"Total cost", "Cost per case"}
 
 
-def _format_value(metric: MetricDelta, value: float) -> str:
+def format_metric_value(metric: MetricDelta, value: float) -> str:
     if metric.label in _PERCENT_METRICS:
         return f"{value:.1%}"
     if metric.label in _CURRENCY_METRICS:
@@ -16,7 +16,7 @@ def _format_value(metric: MetricDelta, value: float) -> str:
     return f"{value:,.1f}"
 
 
-def _format_percent_change(metric: MetricDelta) -> str:
+def format_percent_change(metric: MetricDelta) -> str:
     if metric.percent_change is None:
         return "n/a"
     return f"{metric.percent_change:+.1f}%"
@@ -56,9 +56,9 @@ def _build_kpi_table(diff: RedesignDiff) -> list[str]:
     header = f"{'Metric':<22}{'Before':>16}{'After':>16}{'Change':>14}"
     lines = [header, "-" * len(header)]
     for metric in diff.metrics:
-        before_str = _format_value(metric, metric.before)
-        after_str = _format_value(metric, metric.after)
-        change_str = _format_percent_change(metric)
+        before_str = format_metric_value(metric, metric.before)
+        after_str = format_metric_value(metric, metric.after)
+        change_str = format_percent_change(metric)
         lines.append(f"{metric.label:<22}{before_str:>16}{after_str:>16}{change_str:>14}")
     return lines
 
@@ -88,7 +88,7 @@ def _build_utilization_section(diff: RedesignDiff) -> list[str]:
     return lines
 
 
-def _build_risks(diff: RedesignDiff) -> list[str]:
+def build_risks(diff: RedesignDiff) -> list[str]:
     risks = []
     if diff.failure_rate.delta > 0:
         risks.append(
@@ -116,7 +116,7 @@ def _build_risks(diff: RedesignDiff) -> list[str]:
     return risks
 
 
-def _build_recommendation(diff: RedesignDiff) -> str:
+def build_recommendation(diff: RedesignDiff) -> str:
     cost_improved = diff.roi.total_cost_savings > 0
     quality_maintained = diff.completion_rate.delta >= 0 and diff.failure_rate.delta <= 0
     payback_ok = diff.roi.implementation_cost is None or diff.roi.payback_feasible
@@ -171,13 +171,19 @@ def generate_report(diff: RedesignDiff) -> str:
         "",
         "RISKS",
         "-" * 60,
-        *[f"  - {risk}" for risk in _build_risks(diff)],
+        *[f"  - {risk}" for risk in build_risks(diff)],
         "",
         "RECOMMENDATION",
         "-" * 60,
-        _build_recommendation(diff),
+        build_recommendation(diff),
     ]
     return "\n".join(sections)
 
 
-__all__ = ["generate_report"]
+__all__ = [
+    "generate_report",
+    "format_metric_value",
+    "format_percent_change",
+    "build_risks",
+    "build_recommendation",
+]
