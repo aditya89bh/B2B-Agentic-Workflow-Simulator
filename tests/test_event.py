@@ -38,3 +38,8 @@ def test_event_is_immutable():
 
     with pytest.raises(AttributeError):
         event.case_id = "case-2"
+
+
+def test_event_type_includes_queueing_and_resource_release():
+    assert EventType.TASK_QUEUED.value == "task_queued"
+    assert EventType.RESOURCE_RELEASED.value == "resource_released"
