@@ -265,7 +265,7 @@ _CURRENCY_METRICS = {
     "total_cost_savings",
     "cost_savings_per_case",
 }
-_METRIC_LABELS = {
+METRIC_LABELS = {
     "completion_rate": "Completion rate",
     "avg_cycle_time_minutes": "Cycle time (minutes)",
     "avg_wait_time_minutes": "Wait time (minutes)",
@@ -286,7 +286,8 @@ _METRIC_LABELS = {
 }
 
 
-def _format_metric_value(metric: str, value: float) -> str:
+def format_stat_value(metric: str, value: float) -> str:
+    """Format a single statistic for `metric` (percent, currency, or plain number)."""
     if metric in _PERCENT_METRICS:
         return f"{value:.1%}"
     if metric in _CURRENCY_METRICS:
@@ -304,22 +305,22 @@ def _build_stats_table(metric_stats: dict[str, MetricStats], metrics: Sequence[s
     for metric in metrics:
         stats = metric_stats.get(metric)
         if stats is None or stats.sample_count == 0:
-            lines.append(f"{_METRIC_LABELS.get(metric, metric):<30}{'n/a':>14}")
+            lines.append(f"{METRIC_LABELS.get(metric, metric):<30}{'n/a':>14}")
             continue
-        label = _METRIC_LABELS.get(metric, metric)
+        label = METRIC_LABELS.get(metric, metric)
         lines.append(
             f"{label:<30}"
-            f"{_format_metric_value(metric, stats.mean):>14}"
-            f"{_format_metric_value(metric, stats.minimum):>14}"
-            f"{_format_metric_value(metric, stats.maximum):>14}"
-            f"{_format_metric_value(metric, stats.median):>14}"
-            f"{_format_metric_value(metric, stats.p10):>14}"
-            f"{_format_metric_value(metric, stats.p90):>14}"
+            f"{format_stat_value(metric, stats.mean):>14}"
+            f"{format_stat_value(metric, stats.minimum):>14}"
+            f"{format_stat_value(metric, stats.maximum):>14}"
+            f"{format_stat_value(metric, stats.median):>14}"
+            f"{format_stat_value(metric, stats.p10):>14}"
+            f"{format_stat_value(metric, stats.p90):>14}"
         )
     return lines
 
 
-def _build_variability_summary(result: MonteCarloResult) -> list[str]:
+def build_variability_summary(result: MonteCarloResult) -> list[str]:
     lines = [
         f"'{result.workflow_name}' was simulated {result.num_runs} times across "
         "independent random seeds to characterize outcome variability."
@@ -357,7 +358,7 @@ def generate_monte_carlo_report(result: MonteCarloResult) -> str:
         "",
         "EXECUTIVE SUMMARY",
         "-" * 60,
-        *_build_variability_summary(result),
+        *build_variability_summary(result),
         "",
         "METRIC DISTRIBUTION",
         "-" * 60,
@@ -366,7 +367,7 @@ def generate_monte_carlo_report(result: MonteCarloResult) -> str:
     return "\n".join(sections)
 
 
-def _build_comparison_variability_summary(result: MonteCarloComparisonResult) -> list[str]:
+def build_comparison_variability_summary(result: MonteCarloComparisonResult) -> list[str]:
     lines = [
         f"'{result.before_name}' vs '{result.after_name}' was simulated {result.num_runs} "
         "times across independent random seeds to characterize how reliably the redesign "
@@ -412,7 +413,7 @@ def generate_monte_carlo_comparison_report(result: MonteCarloComparisonResult) -
         "",
         "EXECUTIVE SUMMARY",
         "-" * 60,
-        *_build_comparison_variability_summary(result),
+        *build_comparison_variability_summary(result),
         "",
         "METRIC DISTRIBUTION",
         "-" * 60,
@@ -424,12 +425,16 @@ def generate_monte_carlo_comparison_report(result: MonteCarloComparisonResult) -
 __all__ = [
     "KPI_METRICS",
     "COMPARISON_METRICS",
+    "METRIC_LABELS",
     "MetricStats",
     "MonteCarloResult",
     "MonteCarloComparisonResult",
     "compute_metric_stats",
     "run_monte_carlo",
     "run_monte_carlo_comparison",
+    "format_stat_value",
+    "build_variability_summary",
+    "build_comparison_variability_summary",
     "generate_monte_carlo_report",
     "generate_monte_carlo_comparison_report",
 ]
