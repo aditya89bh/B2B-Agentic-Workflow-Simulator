@@ -1,5 +1,6 @@
 import pytest
 
+from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.discrete_event import DiscreteEventEngine
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
 from b2b_workflow_simulator.primitives.edge import Edge
@@ -191,6 +192,17 @@ def test_simulation_runner_engine_discrete_matches_direct_engine_use():
     direct = DiscreteEventEngine(seed=5).run(workflow, 25)
 
     assert via_runner.kpi == direct.kpi
+
+
+def test_arrival_model_is_deterministic_given_same_seed():
+    workflow = build_linear_workflow(error_rate=0.0)
+    model = ArrivalModel(kind="uniform", min_interval_minutes=1.0, max_interval_minutes=5.0)
+
+    result_a = DiscreteEventEngine(seed=4).run(workflow, 25, arrival_model=model)
+    result_b = DiscreteEventEngine(seed=4).run(workflow, 25, arrival_model=model)
+
+    assert result_a.kpi == result_b.kpi
+    assert result_a.kpi.total_wait_minutes >= 0.0
 
 
 def test_two_engines_can_diverge_under_shared_actor_contention():
