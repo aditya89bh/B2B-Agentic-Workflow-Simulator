@@ -234,9 +234,94 @@ def run_sensitivity_grid(
     )
 
 
+def _format_value(value: float) -> str:
+    return f"{value:.4g}"
+
+
+def _build_roi_table(result: SensitivityGridResult) -> list[str]:
+    x_width = max(10, max(len(_format_value(x)) for x in result.x_values) + 2)
+    corner_label = f"{result.y_parameter} / {result.x_parameter}"
+    header = f"{corner_label:<22}" + "".join(
+        f"{_format_value(x):>{x_width}}" for x in result.x_values
+    )
+    lines = [header, "-" * len(header)]
+    for y_value in result.y_values:
+        cells = []
+        for x_value in result.x_values:
+            roi = result.point_at(x_value, y_value).diff.roi.roi_percentage
+            cells.append(f"{roi:+.1f}%" if roi is not None else "n/a")
+        row = f"{_format_value(y_value):<22}" + "".join(f"{cell:>{x_width}}" for cell in cells)
+        lines.append(row)
+    return lines
+
+
+def _build_region_summary(result: SensitivityGridResult) -> list[str]:
+    total = len(result.points)
+    safe = len(result.safe_region_points())
+    negative = len(result.negative_region_points())
+    unstable = len(result.unstable_region_points())
+    return [
+        f"Safe operating region:     {safe}/{total} combinations "
+        f"({safe / total:.0%})" if total else "Safe operating region:     n/a",
+        f"Negative ROI region:       {negative}/{total} combinations "
+        f"({negative / total:.0%})" if total else "Negative ROI region:       n/a",
+        f"Unstable region:           {unstable}/{total} combinations "
+        f"({unstable / total:.0%})" if total else "Unstable region:           n/a",
+    ]
+
+
+def _build_boundary_notes(result: SensitivityGridResult) -> list[str]:
+    lines = []
+    unstable_points = result.unstable_region_points()
+    if unstable_points:
+        worst = min(unstable_points, key=lambda p: p.diff.completion_rate.after)
+        lines.append(
+            f"Operational breakdown observed at {result.x_parameter}="
+            f"{_format_value(worst.x_value)}, {result.y_parameter}="
+            f"{_format_value(worst.y_value)} (completion rate "
+            f"{worst.diff.completion_rate.after:.1%}); avoid this combination."
+        )
+    negative_points = result.negative_region_points()
+    if negative_points:
+        lines.append(
+            f"{len(negative_points)} combination(s) produce negative ROI; review the "
+            "ROI table above to identify the boundary before committing to a rollout."
+        )
+    if not lines:
+        lines.append("Every tested combination remains in the safe operating region.")
+    return lines
+
+
+def generate_sensitivity_grid_report(result: SensitivityGridResult) -> str:
+    """Render a `SensitivityGridResult` as a plain-text ROI matrix with region analysis."""
+    sections = [
+        "=" * 60,
+        "MULTI-PARAMETER SENSITIVITY ANALYSIS",
+        "=" * 60,
+        "",
+        f"Grid: {result.x_parameter} (columns) x {result.y_parameter} (rows)",
+        f"ROI %, {len(result.x_values)} x {len(result.y_values)} = "
+        f"{len(result.points)} combinations simulated",
+        "",
+        "ROI MATRIX",
+        "-" * 60,
+        *_build_roi_table(result),
+        "",
+        "OPERATING REGIONS",
+        "-" * 60,
+        *_build_region_summary(result),
+        "",
+        "NOTES",
+        "-" * 60,
+        *[f"  - {note}" for note in _build_boundary_notes(result)],
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "UNSTABLE_COMPLETION_RATE_THRESHOLD",
     "GridPoint",
     "SensitivityGridResult",
     "run_sensitivity_grid",
+    "generate_sensitivity_grid_report",
 ]
