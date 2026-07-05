@@ -5,15 +5,19 @@ from __future__ import annotations
 import argparse
 import sys
 
-from b2b_workflow_simulator.examples.sales_lead_qualification import (
-    build_after_workflow,
-    build_before_workflow,
-)
+from b2b_workflow_simulator.examples import invoice_processing, sales_lead_qualification
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.simulation import SimulationRunner
 
 EXAMPLES = {
-    "sales-lead-qualification": (build_before_workflow, build_after_workflow),
+    "sales-lead-qualification": (
+        sales_lead_qualification.build_before_workflow,
+        sales_lead_qualification.build_after_workflow,
+    ),
+    "invoice-processing": (
+        invoice_processing.build_before_workflow,
+        invoice_processing.build_after_workflow,
+    ),
 }
 
 
