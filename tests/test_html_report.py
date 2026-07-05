@@ -3,6 +3,7 @@ from b2b_workflow_simulator.html_report import (
     render_monte_carlo_comparison_html,
     render_monte_carlo_html,
     render_portfolio_html,
+    render_sensitivity_grid_html,
 )
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.monte_carlo import run_monte_carlo, run_monte_carlo_comparison
@@ -11,6 +12,7 @@ from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
 from b2b_workflow_simulator.primitives.human import HumanActor
 from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.redesign import compare_workflows
+from b2b_workflow_simulator.sensitivity_grid import run_sensitivity_grid
 from b2b_workflow_simulator.workflow import Workflow
 
 
@@ -230,3 +232,58 @@ def test_render_monte_carlo_comparison_html_handles_missing_payback():
     output = render_monte_carlo_comparison_html(result)
 
     assert "n/a" in output
+
+
+def test_render_sensitivity_grid_html_is_well_formed_document():
+    result = run_sensitivity_grid(
+        build_mc_workflow,
+        build_mc_after_workflow,
+        "ai_error_rate",
+        [0.05, 0.1],
+        "ai_cost_per_execution",
+        [0.5, 1.0],
+        num_cases=20,
+        seed=1,
+    )
+
+    output = render_sensitivity_grid_html(result)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+
+
+def test_render_sensitivity_grid_html_includes_expected_sections():
+    result = run_sensitivity_grid(
+        build_mc_workflow,
+        build_mc_after_workflow,
+        "ai_error_rate",
+        [0.05, 0.1],
+        "ai_cost_per_execution",
+        [0.5, 1.0],
+        num_cases=20,
+        seed=1,
+    )
+
+    output = render_sensitivity_grid_html(result)
+
+    assert "ROI Matrix" in output
+    assert "Operating Regions" in output
+    assert "region-" in output
+
+
+def test_render_sensitivity_grid_html_marks_unstable_cells():
+    result = run_sensitivity_grid(
+        build_mc_workflow,
+        build_mc_after_workflow,
+        "ai_error_rate",
+        [0.01, 0.95],
+        "ai_cost_per_execution",
+        [0.5],
+        num_cases=30,
+        seed=1,
+    )
+
+    output = render_sensitivity_grid_html(result)
+
+    if result.unstable_region_points():
+        assert 'class="region-unstable"' in output
