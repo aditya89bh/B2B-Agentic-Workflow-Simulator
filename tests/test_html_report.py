@@ -1,5 +1,8 @@
+from b2b_workflow_simulator.capacity_planning import analyze_capacity, simulate_hiring
 from b2b_workflow_simulator.html_report import (
+    render_capacity_html,
     render_diff_html,
+    render_hiring_html,
     render_monte_carlo_comparison_html,
     render_monte_carlo_html,
     render_portfolio_html,
@@ -7,10 +10,12 @@ from b2b_workflow_simulator.html_report import (
 )
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.monte_carlo import run_monte_carlo, run_monte_carlo_comparison
+from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
 from b2b_workflow_simulator.primitives.human import HumanActor
 from b2b_workflow_simulator.primitives.node import Node
+from b2b_workflow_simulator.primitives.worker import Worker
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.sensitivity_grid import run_sensitivity_grid
 from b2b_workflow_simulator.workflow import Workflow
@@ -287,3 +292,80 @@ def test_render_sensitivity_grid_html_marks_unstable_cells():
 
     if result.unstable_region_points():
         assert 'class="region-unstable"' in output
+
+
+def build_pool_workflow(num_workers: int = 1) -> Workflow:
+    workflow = Workflow(workflow_id="wf", name="Pooled <b>Team</b>", entry_node_id="handle")
+    workers = [
+        Worker(worker_id=f"w{i}", name=f"Worker {i}", hourly_cost=40.0)
+        for i in range(num_workers)
+    ]
+    workflow.add_actor(ActorPool(actor_id="team", name="Support Team", workers=workers))
+    workflow.add_node(
+        Node(
+            node_id="handle",
+            name="Handle",
+            actor_id="team",
+            base_duration_minutes=30.0,
+            is_terminal=True,
+        )
+    )
+    return workflow
+
+
+def test_render_capacity_html_is_well_formed_document():
+    kpi = KPIResult(workflow_name="Ops <script>", actor_utilization={"agent": 0.95})
+    plan = analyze_capacity(kpi)
+
+    output = render_capacity_html(plan)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_capacity_html_includes_recommendations_table():
+    kpi = KPIResult(workflow_name="Ops", actor_utilization={"agent": 0.95, "reviewer": 0.2})
+    plan = analyze_capacity(kpi)
+
+    output = render_capacity_html(plan)
+
+    assert "Staffing Recommendations" in output
+    assert "agent" in output
+    assert "reviewer" in output
+
+
+def test_render_capacity_html_handles_empty_plan():
+    kpi = KPIResult(workflow_name="Empty Ops")
+    plan = analyze_capacity(kpi)
+
+    output = render_capacity_html(plan)
+
+    assert "No capacity-aware utilization data" in output
+
+
+def test_render_hiring_html_is_well_formed_document():
+    extra = [Worker(worker_id="w-extra", name="Extra", hourly_cost=40.0)]
+    result = simulate_hiring(
+        build_pool_workflow, "team", extra, num_cases=20, seed=1, arrival_interval_minutes=5.0
+    )
+
+    output = render_hiring_html(result)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+
+
+def test_render_hiring_html_includes_headcount_change():
+    extra = [Worker(worker_id="w-extra", name="Extra", hourly_cost=40.0)]
+    result = simulate_hiring(
+        build_pool_workflow, "team", extra, num_cases=20, seed=1, arrival_interval_minutes=5.0
+    )
+
+    output = render_hiring_html(result)
+
+    assert "1" in output
+    assert "2" in output
+    assert "Impact" in output
