@@ -50,7 +50,14 @@ def build_small_workflow() -> Workflow:
         )
     )
     workflow.add_node(
-        Node(node_id="end", name="End", actor_id="ai", base_duration_minutes=2.0, is_terminal=True)
+        Node(
+            node_id="end",
+            name="End",
+            actor_id="ai",
+            base_duration_minutes=2.0,
+            additional_actor_ids=("human",),
+            is_terminal=True,
+        )
     )
     workflow.add_edge(Edge(source="start", target="end", probability=1.0, condition="always"))
     return workflow
@@ -99,6 +106,14 @@ def test_round_trip_preserves_node_metadata():
     rebuilt = workflow_from_dict(workflow_to_dict(workflow))
 
     assert rebuilt.get_node("start").metadata == {"tag": "intake"}
+
+
+def test_round_trip_preserves_additional_actor_ids():
+    workflow = build_small_workflow()
+    rebuilt = workflow_from_dict(workflow_to_dict(workflow))
+
+    assert rebuilt.get_node("end").additional_actor_ids == ("human",)
+    assert rebuilt.get_node("start").additional_actor_ids == ()
 
 
 def test_save_and_load_workflow_round_trips_via_file(tmp_path):
