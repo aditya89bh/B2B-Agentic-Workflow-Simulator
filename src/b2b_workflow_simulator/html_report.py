@@ -11,6 +11,13 @@ from __future__ import annotations
 
 import html
 
+from b2b_workflow_simulator.capacity_planning import (
+    BALANCED,
+    OVERLOADED,
+    UNDERUTILIZED,
+    CapacityPlan,
+    HiringSimulationResult,
+)
 from b2b_workflow_simulator.monte_carlo import (
     COMPARISON_METRICS,
     KPI_METRICS,
@@ -369,10 +376,84 @@ def render_sensitivity_grid_html(result: SensitivityGridResult) -> str:
     )
 
 
+_STATUS_CLASS = {
+    OVERLOADED: "region-negative",
+    UNDERUTILIZED: "region-unstable",
+    BALANCED: "region-safe",
+}
+
+
+def _capacity_table(plan: CapacityPlan) -> str:
+    if not plan.recommendations:
+        return "<p>No capacity-aware utilization data was recorded for this run.</p>"
+    rows = []
+    for rec in plan.recommendations:
+        css_class = _STATUS_CLASS.get(rec.status, "")
+        rows.append(
+            "<tr>"
+            f"<td>{_escape(rec.resource_id)}</td>"
+            f"<td>{_escape(rec.resource_kind)}</td>"
+            f"<td>{rec.current_utilization:.1%}</td>"
+            f'<td class="{css_class}">{_escape(rec.status)}</td>'
+            f"<td>{rec.current_headcount}</td>"
+            f"<td>{rec.recommended_headcount}</td>"
+            "</tr>"
+        )
+    return (
+        "<table>\n"
+        "  <tr><th>Resource</th><th>Kind</th><th>Utilization</th><th>Status</th>"
+        "<th>Current</th><th>Recommended</th></tr>\n"
+        + "\n".join(rows)
+        + "\n</table>"
+    )
+
+
+def render_capacity_html(plan: CapacityPlan) -> str:
+    """Render a `CapacityPlan` as a standalone HTML staffing report."""
+    rationale_items = "".join(f"<li>{_escape(rec.rationale)}</li>" for rec in plan.recommendations)
+    body = f"""
+  <h1>Capacity Planning Analysis</h1>
+  <p class="subtitle">{_escape(plan.workflow_name)} &mdash; target utilization
+  {plan.target_utilization:.0%}</p>
+
+  <h2>Staffing Recommendations</h2>
+  {_capacity_table(plan)}
+
+  <h2>Details</h2>
+  <ul>{rationale_items}</ul>
+"""
+    return _page(f"{plan.workflow_name} - Capacity Plan", body)
+
+
+def render_hiring_html(result: HiringSimulationResult) -> str:
+    """Render a `HiringSimulationResult` as a standalone HTML before/after report."""
+    body = f"""
+  <h1>Hiring Simulation</h1>
+  <p class="subtitle">{_escape(result.workflow_name)} &mdash; pool {_escape(result.pool_id)}</p>
+
+  <h2>Proposed Headcount Change</h2>
+  <p>{result.baseline_worker_count} &rarr; {result.proposed_worker_count} worker(s)</p>
+
+  <h2>Impact</h2>
+  <table>
+    <tr><th>Metric</th><th>Baseline</th><th>Proposed</th></tr>
+    <tr><td>Utilization</td><td>{result.baseline_utilization:.1%}</td>
+        <td>{result.proposed_utilization:.1%}</td></tr>
+    <tr><td>Max queue depth</td><td>{result.baseline_max_queue_depth}</td>
+        <td>{result.proposed_max_queue_depth}</td></tr>
+    <tr><td>Average wait (minutes)</td><td>{result.baseline_avg_wait_minutes:,.1f}</td>
+        <td>{result.proposed_avg_wait_minutes:,.1f}</td></tr>
+  </table>
+"""
+    return _page(f"{result.workflow_name} - Hiring Simulation", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
     "render_monte_carlo_html",
     "render_monte_carlo_comparison_html",
     "render_sensitivity_grid_html",
+    "render_capacity_html",
+    "render_hiring_html",
 ]
