@@ -58,6 +58,16 @@ def test_run_example_supports_invoice_processing(capsys):
     assert "invoice-processing" in output
 
 
+def test_run_example_supports_customer_support_ticket_resolution(capsys):
+    exit_code = main(
+        ["run-example", "customer-support-ticket-resolution", "--cases", "20", "--seed", "1"]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "customer-support-ticket-resolution" in output
+
+
 def test_compare_example_prints_full_roi_report(capsys):
     exit_code = main(
         ["compare-example", "sales-lead-qualification", "--cases", "50", "--seed", "1"]
