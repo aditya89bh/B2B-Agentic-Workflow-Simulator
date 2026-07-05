@@ -185,6 +185,33 @@ def test_run_samples_durations_from_node_duration_model():
     assert result.kpi.node_total_duration_minutes["a"] != pytest.approx(200 * 10.0)
 
 
+def test_run_rejects_unknown_engine():
+    workflow = build_linear_workflow()
+
+    with pytest.raises(ValueError, match="engine"):
+        SimulationRunner(seed=1).run(workflow, 5, engine="quantum")
+
+
+def test_capacity_aware_run_emits_queued_events_when_overloaded():
+    workflow = build_linear_workflow(error_rate=0.0)
+
+    result = SimulationRunner(seed=1).run(workflow, 20, arrival_interval_minutes=1.0)
+
+    event_types = [event.event_type for event in result.events]
+    assert EventType.TASK_QUEUED in event_types
+    assert EventType.RESOURCE_RELEASED in event_types
+
+
+def test_uncontended_run_never_emits_queued_events():
+    workflow = build_linear_workflow(error_rate=0.0)
+
+    result = SimulationRunner(seed=1).run(workflow, 20)
+
+    event_types = [event.event_type for event in result.events]
+    assert EventType.TASK_QUEUED not in event_types
+    assert EventType.RESOURCE_RELEASED not in event_types
+
+
 def test_run_counts_ai_agent_escalations():
     workflow = Workflow(workflow_id="wf", name="Escalating", entry_node_id="a")
     workflow.add_actor(
