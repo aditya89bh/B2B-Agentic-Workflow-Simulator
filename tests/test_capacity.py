@@ -94,6 +94,24 @@ def test_busy_minutes_accumulates_across_calls():
     assert scheduler.busy_minutes("rep") == 40.0
 
 
+def test_peek_free_at_is_zero_for_unknown_actor():
+    scheduler = ActorScheduler()
+
+    assert scheduler.peek_free_at("nobody") == 0.0
+
+
+def test_peek_free_at_reflects_last_scheduled_task_without_reserving():
+    scheduler = ActorScheduler()
+    scheduler.schedule("rep", ready_time=0.0, duration=30.0, available_hours_per_day=8.0)
+
+    peeked = scheduler.peek_free_at("rep")
+
+    assert peeked == 30.0
+    # Peeking must not mutate state: a real schedule call still starts at 30.
+    result = scheduler.schedule("rep", ready_time=0.0, duration=10.0, available_hours_per_day=8.0)
+    assert result.start == 30.0
+
+
 def test_known_actor_ids_lists_all_scheduled_actors():
     scheduler = ActorScheduler()
     scheduler.schedule("rep_a", ready_time=0.0, duration=10.0, available_hours_per_day=8.0)
