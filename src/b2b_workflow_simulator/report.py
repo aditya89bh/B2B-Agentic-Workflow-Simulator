@@ -221,16 +221,18 @@ def _build_portfolio_executive_summary(portfolio: WorkflowPortfolio) -> list[str
 
 
 def _build_portfolio_ranking_table(portfolio: WorkflowPortfolio, by: str) -> list[str]:
-    header = f"{'Rank':<6}{'Workflow':<32}{'Cost Savings':>16}{'ROI %':>10}"
+    ranked = portfolio.ranked(by=by)
+    name_width = max([len("Workflow")] + [len(entry.name) for entry in ranked]) + 2
+    header = f"{'Rank':<6}{'Workflow':<{name_width}}{'Cost Savings':>16}{'ROI %':>10}"
     lines = [header, "-" * len(header)]
-    for rank, entry in enumerate(portfolio.ranked(by=by), start=1):
+    for rank, entry in enumerate(ranked, start=1):
         savings = f"${entry.diff.roi.total_cost_savings:,.2f}"
         roi = (
             f"{entry.diff.roi.roi_percentage:+.1f}%"
             if entry.diff.roi.roi_percentage is not None
             else "n/a"
         )
-        lines.append(f"{rank:<6}{entry.name:<32}{savings:>16}{roi:>10}")
+        lines.append(f"{rank:<6}{entry.name:<{name_width}}{savings:>16}{roi:>10}")
     return lines
 
 
