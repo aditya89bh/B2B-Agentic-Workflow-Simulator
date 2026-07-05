@@ -92,6 +92,68 @@ bundled example as JSON. `load-example` reads any workflow JSON file
 Every bundled example also ships a ready-made JSON definition under
 `src/b2b_workflow_simulator/examples/data/`. See `docs/json_workflows.md`.
 
+## Run with the discrete-event engine
+
+```bash
+b2b-simulator run-example sales-lead-qualification --engine discrete
+b2b-simulator compare-example sales-lead-qualification --engine discrete --arrival-interval 15
+```
+
+`--engine discrete` switches from the default sequential engine to a
+global, time-ordered event queue, giving a more general model of
+contention when many cases are simultaneously in flight (see
+`docs/discrete_event_engine.md`). Results match the default engine
+under light load and can diverge slightly under heavy, bursty
+contention -- both are deterministic and internally consistent for a
+given seed.
+
+## Understand outcome variability with Monte Carlo analysis
+
+```bash
+b2b-simulator monte-carlo-example invoice-processing --cases 300 --seeds 1,2,3,4,5 --implementation-cost 8000
+b2b-simulator monte-carlo-portfolio sales-lead-qualification invoice-processing --cases 300 --seeds 1,2,3,4,5
+```
+
+A single seeded run shows one plausible outcome. `monte-carlo-example`
+re-runs the named example across every listed seed and reports mean,
+min, max, median, and P10/P90 for every KPI plus ROI and payback, with
+an executive summary explaining how much the outcome actually varies.
+`monte-carlo-portfolio` runs the same analysis across several examples
+and prints a condensed summary row per workflow. Add `--html-output` to
+`monte-carlo-example` for a shareable HTML version. See
+`docs/monte_carlo.md`.
+
+## Sweep two assumptions at once
+
+```bash
+b2b-simulator sensitivity-grid-example invoice-processing \
+  --x-parameter ai_error_rate --x-values 0,0.1,0.2,0.3 \
+  --y-parameter ai_cost_per_execution --y-values 0,5,10,20 \
+  --html-output grid.html
+```
+
+Prints an ROI matrix across every combination of the two swept
+parameters, plus a breakdown of how many combinations are in the safe,
+negative-ROI, or operationally unstable region. See
+`docs/advanced_sensitivity.md`.
+
+## Model a team instead of a single actor
+
+Build an `ActorPool` of `Worker`s (each with their own cost, speed,
+error rate, and optional `Shift` schedule) and reference it from a
+`Node` exactly like any other actor -- see `docs/team_capacity.md` for
+the full model. Once a workflow uses a pool, check its staffing level:
+
+```bash
+b2b-simulator team-utilization invoice-processing --arrival-interval 10
+b2b-simulator capacity-analysis invoice-processing --arrival-interval 10 --html-output capacity.html
+```
+
+`team-utilization` prints raw actor/pool/worker utilization figures.
+`capacity-analysis` goes further, classifying each resource as
+overloaded, underutilized, or balanced against a target utilization and
+recommending a headcount change. See `docs/capacity_planning.md`.
+
 ## Generate a shareable HTML report
 
 ```bash
