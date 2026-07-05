@@ -29,6 +29,7 @@ from b2b_workflow_simulator.monte_carlo import (
     build_variability_summary,
     format_stat_value,
 )
+from b2b_workflow_simulator.policy import SEVERITY_ERROR, PolicyEvaluation
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.redesign import MetricDelta, RedesignDiff
 from b2b_workflow_simulator.report import (
@@ -448,6 +449,49 @@ def render_hiring_html(result: HiringSimulationResult) -> str:
     return _page(f"{result.workflow_name} - Hiring Simulation", body)
 
 
+def _violation_table(evaluation: PolicyEvaluation) -> str:
+    if not evaluation.violations:
+        return "<p>No violations to report.</p>"
+    rows = []
+    for violation in evaluation.violations:
+        css_class = "region-negative" if violation.severity == SEVERITY_ERROR else "region-unstable"
+        node_label = violation.node_id or "-"
+        rows.append(
+            "<tr>"
+            f"<td>{_escape(violation.policy_name)}</td>"
+            f"<td>{_escape(violation.policy_kind)}</td>"
+            f"<td>{_escape(node_label)}</td>"
+            f'<td class="{css_class}">{_escape(violation.severity)}</td>'
+            f"<td>{_escape(violation.description)}</td>"
+            "</tr>"
+        )
+    return (
+        "<table>\n"
+        "  <tr><th>Policy</th><th>Kind</th><th>Node</th><th>Severity</th>"
+        "<th>Description</th></tr>\n"
+        + "\n".join(rows)
+        + "\n</table>"
+    )
+
+
+def render_policy_html(evaluation: PolicyEvaluation) -> str:
+    """Render a `PolicyEvaluation` as a standalone HTML governance report."""
+    status = "Compliant" if evaluation.is_compliant else "Violations found"
+    policy_word = "policy" if evaluation.policies_checked == 1 else "policies"
+    body = f"""
+  <h1>Policy Compliance Analysis</h1>
+  <p class="subtitle">{_escape(evaluation.workflow_name)} &mdash;
+  {evaluation.policies_checked} {policy_word} checked</p>
+
+  <p class="callout"><strong>{_escape(status)}</strong>
+  &mdash; {evaluation.error_count} error(s), {evaluation.warning_count} warning(s)</p>
+
+  <h2>Violations</h2>
+  {_violation_table(evaluation)}
+"""
+    return _page(f"{evaluation.workflow_name} - Policy Compliance", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -456,4 +500,5 @@ __all__ = [
     "render_sensitivity_grid_html",
     "render_capacity_html",
     "render_hiring_html",
+    "render_policy_html",
 ]
