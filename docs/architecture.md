@@ -12,28 +12,40 @@ definition, not in the engine.
 ## Layers
 
 ```
-primitives/   Data-only building blocks (Node, Edge, Actor, Task, Event, DurationModel)
-workflow.py   Graph structure + structural validation
-capacity.py   ActorScheduler: per-actor queueing and daily capacity limits
-kpi.py        Aggregation of simulation output into business metrics
-simulation.py Execution engine (stateless aside from its seeded RNG)
-redesign.py   Before/after comparison of two KPIResult objects, plus ROI
-report.py     Plain-text rendering of a RedesignDiff
-export.py     JSON/CSV serialization of events, KPIs, and diffs
-examples/     Concrete, business-realistic Workflow instances
-cli.py        Thin argument-parsing layer over the above
+primitives/    Data-only building blocks (Node, Edge, Actor, Task, Event, DurationModel)
+workflow.py    Graph structure + structural validation
+workflow_io.py JSON (de)serialization + stdlib schema validation for Workflow
+capacity.py    ActorScheduler: per-actor queueing and daily capacity limits
+kpi.py         Aggregation of simulation output into business metrics
+simulation.py  Execution engine (stateless aside from its seeded RNG)
+redesign.py    Before/after comparison of two KPIResult objects, plus ROI
+portfolio.py   Aggregation and ranking across several RedesignDiff results
+sensitivity.py Parameter sweeps over a before/after pair, break-even detection
+report.py      Plain-text rendering of a RedesignDiff or WorkflowPortfolio
+html_report.py Static HTML rendering of a RedesignDiff or WorkflowPortfolio
+export.py      JSON/CSV serialization of events, KPIs, and diffs
+examples/      Concrete, business-realistic Workflow instances + sample JSON
+cli.py         Thin argument-parsing layer over the above
 ```
 
 Each layer only depends on the ones listed above it. `primitives` has no
 dependencies within the package. `workflow.py` and `capacity.py` depend
-only on `primitives`. `kpi.py` is standalone data. `simulation.py`
-depends on `primitives`, `workflow.py`, `capacity.py`, and `kpi.py`.
-`redesign.py` depends only on `kpi.py`, so a `RedesignDiff` can be built
-from any two `KPIResult` objects without touching the simulation engine
-at all -- useful for testing and for future integrations that produce
-KPIs some other way. `report.py` and `export.py` both depend only on
-`redesign.py` (and `kpi.py`/`primitives` for export), keeping "how we
-compute results" fully separate from "how we present them."
+only on `primitives`. `workflow_io.py` depends on `primitives` and
+`workflow.py` to build/serialize a `Workflow`, but not on `simulation.py`
+-- persistence and execution are independent concerns. `kpi.py` is
+standalone data. `simulation.py` depends on `primitives`, `workflow.py`,
+`capacity.py`, and `kpi.py`. `redesign.py` depends only on `kpi.py`, so a
+`RedesignDiff` can be built from any two `KPIResult` objects without
+touching the simulation engine at all -- useful for testing and for
+future integrations that produce KPIs some other way. `portfolio.py`
+depends only on `kpi.py` and `redesign.py`, following the same pattern:
+it aggregates already-computed `RedesignDiff` results rather than
+running simulations itself. `sensitivity.py` is the one exception that
+does depend on `simulation.py`, since a sweep has to actually re-run the
+simulation at each parameter value. `report.py` and `html_report.py`
+both depend on `redesign.py` and `portfolio.py`, and `export.py` depends
+on `redesign.py` (and `kpi.py`/`primitives`), keeping "how we compute
+results" fully separate from "how we present them."
 
 ## Node and Edge: the graph
 
@@ -118,13 +130,75 @@ and utilization sections, a heuristic-driven risks list, and a closing
 recommendation. `export.py` serializes the same underlying data
 (events, `KPIResult`, `RedesignDiff`) to JSON or CSV for downstream tools.
 
-## What Phase 2 deliberately leaves out
+## Portfolio aggregation and ranking
+
+A single `RedesignDiff` answers "should we do this one redesign?" A
+`WorkflowPortfolio` (in `portfolio.py`) answers a different question:
+"across everything we could redesign, where should we start?" It holds
+a list of `PortfolioEntry` objects, each wrapping the raw before/after
+`KPIResult` pair plus the `RedesignDiff` computed from them, and
+provides `ranked(by=...)` (sorting entries by total cost savings, ROI
+percentage, or per-case savings) and `summary()` (aggregate before/after
+cost, total savings, total wait-time saved, and a combined payback
+period, computed from raw KPI totals rather than re-deriving them from
+averaged deltas). See `docs/portfolio_analysis.md` for the full model
+and the assumptions behind the aggregate payback figure.
+
+## Sensitivity sweeps and break-even detection
+
+`sensitivity.py` re-simulates a before/after pair while varying one
+assumption at a time -- AI error rate, AI cost per execution, human
+hourly cost, arrival interval, or implementation cost -- and returns a
+`SensitivityResult` with one `RedesignDiff` per value tested. Because
+`implementation_cost` only affects the ROI calculation and not the
+simulation itself, that sweep simulates once and reuses the result
+across every value rather than re-running the simulation redundantly.
+`SensitivityResult.break_even_range()` scans consecutive points for a
+sign change in a chosen metric (total cost savings by default) and
+returns the bracketing pair of parameter values, giving a concrete
+answer to "how much can this assumption move before the redesign stops
+paying off?" See `docs/sensitivity_analysis.md`.
+
+## Persisting workflow definitions
+
+`workflow_io.py` converts a `Workflow` to and from a plain JSON-
+compatible `dict`, plus a validation pass (`validate_workflow_dict`)
+implemented as a direct tree walk with `isinstance` checks rather than
+a schema library dependency -- the structure is simple enough (actors,
+nodes, edges, each with a handful of typed fields) that hand-written
+validation is both sufficient and easier to read than a general-purpose
+JSON Schema. `save_workflow`/`load_workflow` wrap this with file I/O.
+Every bundled example ships a matching JSON definition under
+`examples/data/`, generated directly from the Python builders, so the
+two representations cannot silently drift apart (a test asserts every
+sample file loads and validates). See `docs/json_workflows.md`.
+
+## HTML reporting
+
+`html_report.py` renders the same underlying `RedesignDiff` and
+`WorkflowPortfolio` data that `report.py` renders as plain text, but as
+a single, self-contained HTML document with inline CSS -- no frontend
+framework, no external assets, nothing that needs a server. Every piece
+of interpolated text (workflow names, node ids, risk messages) is
+escaped via the stdlib `html` module, so the renderer is safe even if a
+workflow definition contains characters that would otherwise break the
+page. `report.py` and `html_report.py` share the same value-formatting
+and risk/recommendation helper functions so the two presentations never
+disagree about what a number means.
+
+## What Phase 3 deliberately leaves out
 
 - True concurrent, event-driven scheduling across cases (the capacity
   model processes cases in arrival order rather than running a full
   discrete-event simulation with a global event heap).
-- Persistence, a web UI, or workflow authoring tools.
+- A web UI or a GUI workflow authoring tool (JSON persistence supports
+  hand-editing or future tooling, but no such tooling is included here).
 - Multi-currency or time-zone-aware cost/scheduling models.
+- Multi-parameter sensitivity sweeps (each sweep varies exactly one
+  assumption at a time; joint sensitivity across two or more parameters
+  would require a grid search, deliberately left out to avoid
+  over-engineering a feature with no example driving its design yet).
 
-These remain natural extensions for later phases once the redesign and
-capacity model have proven themselves on more examples.
+These remain natural extensions for later phases once the redesign,
+capacity, portfolio, and sensitivity models have proven themselves on
+more examples.
