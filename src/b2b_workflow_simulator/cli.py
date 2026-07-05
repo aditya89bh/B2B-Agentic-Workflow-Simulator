@@ -23,6 +23,7 @@ from b2b_workflow_simulator.sensitivity import (
     run_sensitivity_sweep,
 )
 from b2b_workflow_simulator.simulation import SimulationRunner
+from b2b_workflow_simulator.workflow_io import load_workflow, save_workflow
 
 EXPORT_FORMATS = ("json", "csv")
 
@@ -306,6 +307,52 @@ def _parse_float_list(raw: str) -> list[float]:
         ) from exc
 
 
+def save_example(example_name: str, output_dir: str) -> int:
+    """Save the before/after workflow definitions of a bundled example as JSON files."""
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return 1
+
+    build_before, build_after = EXAMPLES[example_name]
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+
+    files = {
+        f"{example_name}-before.json": build_before(),
+        f"{example_name}-after.json": build_after(),
+    }
+    for filename, workflow in files.items():
+        file_path = destination / filename
+        save_workflow(workflow, file_path)
+        print(f"  - {file_path}")
+    print(f"Saved {len(files)} workflow definition(s) to {destination}/:")
+    return 0
+
+
+def load_example(path: str, num_cases: int, seed: int | None) -> int:
+    """Load a workflow definition from JSON and print its simulated KPI summary."""
+    try:
+        workflow = load_workflow(path)
+    except (OSError, ValueError) as exc:
+        print(f"Failed to load workflow from '{path}': {exc}", file=sys.stderr)
+        return 1
+
+    result = SimulationRunner(seed=seed).run(workflow, num_cases)
+    kpi = result.kpi
+
+    print(f"Loaded workflow: {workflow.name}")
+    print(f"Cases simulated: {num_cases}")
+    print()
+    print(f"Completed:          {kpi.completed_cases}")
+    print(f"Failed:             {kpi.failed_cases}")
+    print(f"Completion rate:    {kpi.completion_rate:.1%}")
+    print(f"Total cost:         ${kpi.total_cost:,.2f}")
+    print(f"Avg cost / case:    ${kpi.avg_cost_per_case:,.2f}")
+    print(f"Avg cycle time:     {kpi.avg_cycle_time_minutes:,.1f} minutes")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="b2b-simulator",
@@ -522,6 +569,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minutes between case arrivals; enables capacity-aware queueing.",
     )
 
+    save_parser = subparsers.add_parser(
+        "save-example",
+        help="Save a bundled example's before/after workflow definitions as JSON.",
+    )
+    save_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to save.",
+    )
+    save_parser.add_argument(
+        "--output-dir",
+        default="workflows",
+        help="Directory to write workflow JSON files into (default: ./workflows).",
+    )
+
+    load_parser = subparsers.add_parser(
+        "load-example",
+        help="Load a workflow definition from JSON and print its simulated KPI summary.",
+    )
+    load_parser.add_argument("path", help="Path to a workflow definition JSON file.")
+    load_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate (default: 200).",
+    )
+    load_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+
     return parser
 
 
@@ -566,6 +646,12 @@ def main(argv: list[str] | None = None) -> int:
             args.implementation_cost,
             args.arrival_interval,
         )
+
+    if args.command == "save-example":
+        return save_example(args.name, args.output_dir)
+
+    if args.command == "load-example":
+        return load_example(args.path, args.cases, args.seed)
 
     parser.print_help()
     return 1
