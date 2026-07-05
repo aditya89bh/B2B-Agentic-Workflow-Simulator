@@ -7,6 +7,7 @@ from b2b_workflow_simulator.sla import (
     EscalationSLA,
     ResponseSLA,
     evaluate_sla,
+    generate_sla_report,
 )
 
 
@@ -231,3 +232,41 @@ def test_evaluate_sla_with_no_rules_has_full_attainment():
     assert report.attainment_rate == 1.0
     assert report.breach_count == 0
     assert report.rules_checked == 0
+
+
+def test_generate_sla_report_includes_attainment_and_penalty():
+    events = [
+        Event(EventType.CASE_STARTED, 0.0, "case-1"),
+        Event(EventType.CASE_COMPLETED, 90.0, "case-1"),
+    ]
+    result = build_result(events)
+    rule = CompletionSLA(name="fast-resolution", deadline_minutes=60.0, penalty_per_minute=5.0)
+
+    report_text = generate_sla_report(evaluate_sla(result, [rule]))
+
+    assert "SLA PERFORMANCE ANALYSIS" in report_text
+    assert "Attainment rate: 0.0%" in report_text
+    assert "Estimated financial penalty: $150.00" in report_text
+    assert "fast-resolution: 1 breach(es)" in report_text
+
+
+def test_generate_sla_report_for_fully_attained_sla():
+    events = [
+        Event(EventType.CASE_STARTED, 0.0, "case-1"),
+        Event(EventType.CASE_COMPLETED, 30.0, "case-1"),
+    ]
+    result = build_result(events)
+    rule = CompletionSLA(name="fast-resolution", deadline_minutes=60.0)
+
+    report_text = generate_sla_report(evaluate_sla(result, [rule]))
+
+    assert "Attainment rate: 100.0%" in report_text
+    assert "Every applicable SLA check was met" in report_text
+
+
+def test_generate_sla_report_for_no_rules():
+    result = build_result([Event(EventType.CASE_STARTED, 0.0, "case-1")])
+
+    report_text = generate_sla_report(evaluate_sla(result, []))
+
+    assert "No SLA rules were attached" in report_text
