@@ -17,11 +17,17 @@ class PortfolioEntry:
     Attributes:
         name: Short, human-readable identifier for this workflow (e.g.
             "sales-lead-qualification"). Used for ranking and reporting.
-        diff: The `RedesignDiff` produced by comparing this workflow's
-            before and after simulation runs.
+        before_kpi: The raw "before" simulation result, kept alongside the
+            diff so totals (e.g. total wait minutes) can be aggregated
+            without re-deriving them from per-case averages.
+        after_kpi: The raw "after" simulation result.
+        diff: The `RedesignDiff` produced by comparing `before_kpi` and
+            `after_kpi`.
     """
 
     name: str
+    before_kpi: KPIResult
+    after_kpi: KPIResult
     diff: RedesignDiff
 
     def rank_value(self, by: str) -> float:
@@ -100,7 +106,9 @@ class WorkflowPortfolio:
     ) -> WorkflowPortfolio:
         """Compare `before_kpi` and `after_kpi` and add the result to the portfolio."""
         diff = compare_workflows(before_kpi, after_kpi, implementation_cost)
-        self.entries.append(PortfolioEntry(name=name, diff=diff))
+        self.entries.append(
+            PortfolioEntry(name=name, before_kpi=before_kpi, after_kpi=after_kpi, diff=diff)
+        )
         return self
 
     def ranked(self, by: str = "total_cost_savings") -> list[PortfolioEntry]:
@@ -116,7 +124,7 @@ class WorkflowPortfolio:
             (total_cost_savings / total_before_cost) * 100.0 if total_before_cost > 0 else None
         )
         total_wait_minutes_saved = sum(
-            entry.diff.wait_time_minutes.before - entry.diff.wait_time_minutes.after
+            entry.before_kpi.total_wait_minutes - entry.after_kpi.total_wait_minutes
             for entry in self.entries
         )
         total_implementation_cost = sum(
