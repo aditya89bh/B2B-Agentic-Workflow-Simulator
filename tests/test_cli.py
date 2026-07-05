@@ -516,3 +516,253 @@ def test_export_example_rejects_unknown_example(tmp_path, capsys):
 
     assert exit_code == 1
     assert "Unknown example" in error_output
+
+
+def test_monte_carlo_example_prints_report(capsys):
+    exit_code = main(
+        [
+            "monte-carlo-example",
+            "sales-lead-qualification",
+            "--cases",
+            "20",
+            "--seeds",
+            "1,2,3",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "MONTE CARLO REDESIGN COMPARISON" in output
+    assert "Seeds: 3" in output
+
+
+def test_monte_carlo_example_writes_html_file(tmp_path):
+    output_path = tmp_path / "mc.html"
+    exit_code = main(
+        [
+            "monte-carlo-example",
+            "sales-lead-qualification",
+            "--cases",
+            "20",
+            "--seeds",
+            "1,2",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_monte_carlo_example_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import monte_carlo_example
+
+    exit_code = monte_carlo_example("not-a-real-example", 20, [1, 2], None, None, "simple", None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_monte_carlo_example_rejects_bad_seeds_list():
+    parser = build_parser()
+
+    exit_code = None
+    try:
+        parser.parse_args(
+            ["monte-carlo-example", "sales-lead-qualification", "--seeds", "not-a-number"]
+        )
+    except SystemExit as exc:
+        exit_code = exc.code
+
+    assert exit_code == 2
+
+
+def test_monte_carlo_portfolio_prints_summary_table(capsys):
+    exit_code = main(
+        [
+            "monte-carlo-portfolio",
+            "sales-lead-qualification",
+            "invoice-processing",
+            "--cases",
+            "20",
+            "--seeds",
+            "1,2,3",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "sales-lead-qualification" in output
+    assert "invoice-processing" in output
+
+
+def test_monte_carlo_portfolio_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import monte_carlo_portfolio
+
+    exit_code = monte_carlo_portfolio(["not-a-real-example"], 20, [1, 2], None, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_sensitivity_grid_example_prints_roi_matrix(capsys):
+    exit_code = main(
+        [
+            "sensitivity-grid-example",
+            "sales-lead-qualification",
+            "--x-parameter",
+            "ai_error_rate",
+            "--x-values",
+            "0.05,0.1",
+            "--y-parameter",
+            "ai_cost_per_execution",
+            "--y-values",
+            "0.5,1.0",
+            "--cases",
+            "20",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "MULTI-PARAMETER SENSITIVITY ANALYSIS" in output
+    assert "ROI MATRIX" in output
+
+
+def test_sensitivity_grid_example_writes_html_file(tmp_path):
+    output_path = tmp_path / "grid.html"
+    exit_code = main(
+        [
+            "sensitivity-grid-example",
+            "sales-lead-qualification",
+            "--x-parameter",
+            "ai_error_rate",
+            "--x-values",
+            "0.05,0.1",
+            "--y-parameter",
+            "ai_cost_per_execution",
+            "--y-values",
+            "0.5,1.0",
+            "--cases",
+            "20",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_sensitivity_grid_example_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import sensitivity_grid_example
+
+    exit_code = sensitivity_grid_example(
+        "not-a-real-example",
+        "ai_error_rate",
+        [0.1],
+        "ai_cost_per_execution",
+        [0.5],
+        20,
+        1,
+        None,
+        None,
+    )
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_capacity_analysis_prints_report(capsys):
+    exit_code = main(
+        [
+            "capacity-analysis",
+            "sales-lead-qualification",
+            "--variant",
+            "after",
+            "--cases",
+            "50",
+            "--arrival-interval",
+            "5.0",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "CAPACITY PLANNING ANALYSIS" in output
+    assert "STAFFING RECOMMENDATIONS" in output
+
+
+def test_capacity_analysis_writes_html_file(tmp_path):
+    output_path = tmp_path / "capacity.html"
+    exit_code = main(
+        [
+            "capacity-analysis",
+            "sales-lead-qualification",
+            "--cases",
+            "50",
+            "--arrival-interval",
+            "5.0",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_capacity_analysis_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import capacity_analysis
+
+    exit_code = capacity_analysis(
+        "not-a-real-example", "after", 20, 1, None, 0.75, 0.9, 0.4, None
+    )
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_team_utilization_prints_actor_utilization(capsys):
+    exit_code = main(
+        [
+            "team-utilization",
+            "sales-lead-qualification",
+            "--variant",
+            "after",
+            "--cases",
+            "50",
+            "--arrival-interval",
+            "5.0",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Actor utilization" in output
+
+
+def test_team_utilization_without_arrival_interval_reports_no_data(capsys):
+    exit_code = main(["team-utilization", "sales-lead-qualification", "--cases", "20"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "No capacity data available" in output
+
+
+def test_team_utilization_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import team_utilization
+
+    exit_code = team_utilization("not-a-real-example", "after", 20, 1, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
