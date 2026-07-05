@@ -1,7 +1,8 @@
-"""Plain-text ROI report generation from a `RedesignDiff`."""
+"""Plain-text ROI report generation from a `RedesignDiff` or `WorkflowPortfolio`."""
 
 from __future__ import annotations
 
+from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.redesign import MetricDelta, RedesignDiff
 
 _PERCENT_METRICS = {"Completion rate", "Failure rate", "Escalation rate"}
@@ -180,8 +181,149 @@ def generate_report(diff: RedesignDiff) -> str:
     return "\n".join(sections)
 
 
+def _build_portfolio_executive_summary(portfolio: WorkflowPortfolio) -> list[str]:
+    summary = portfolio.summary()
+    lines = [
+        f"Portfolio '{portfolio.name}' covers {summary.workflow_count} workflow "
+        f"redesign(s) evaluated together."
+    ]
+    if summary.total_before_cost > 0:
+        direction = "reduce" if summary.total_cost_savings >= 0 else "increase"
+        lines.append(
+            f"Across the simulated volumes, the redesigns {direction} total cost by "
+            f"${abs(summary.total_cost_savings):,.2f}"
+            + (
+                f" ({abs(summary.portfolio_roi_percentage):.1f}%)."
+                if summary.portfolio_roi_percentage is not None
+                else "."
+            )
+        )
+    if summary.total_wait_minutes_saved != 0:
+        direction = "falls" if summary.total_wait_minutes_saved >= 0 else "rises"
+        lines.append(
+            f"Total customer/case wait time {direction} by "
+            f"{abs(summary.total_wait_minutes_saved):,.1f} minutes across the portfolio."
+        )
+    if summary.total_implementation_cost > 0:
+        if summary.payback_feasible and summary.payback_in_periods is not None:
+            lines.append(
+                f"At a combined implementation cost of ${summary.total_implementation_cost:,.2f}, "
+                f"the portfolio pays back in approximately {summary.payback_in_periods:.2f} "
+                "simulated case-volume periods (e.g. months, if each workflow was simulated "
+                "at its typical monthly volume)."
+            )
+        else:
+            lines.append(
+                f"At a combined implementation cost of ${summary.total_implementation_cost:,.2f}, "
+                "the portfolio does not recover its cost under the simulated assumptions."
+            )
+    return lines
+
+
+def _build_portfolio_ranking_table(portfolio: WorkflowPortfolio, by: str) -> list[str]:
+    header = f"{'Rank':<6}{'Workflow':<32}{'Cost Savings':>16}{'ROI %':>10}"
+    lines = [header, "-" * len(header)]
+    for rank, entry in enumerate(portfolio.ranked(by=by), start=1):
+        savings = f"${entry.diff.roi.total_cost_savings:,.2f}"
+        roi = (
+            f"{entry.diff.roi.roi_percentage:+.1f}%"
+            if entry.diff.roi.roi_percentage is not None
+            else "n/a"
+        )
+        lines.append(f"{rank:<6}{entry.name:<32}{savings:>16}{roi:>10}")
+    return lines
+
+
+def _build_portfolio_aggregate_section(portfolio: WorkflowPortfolio) -> list[str]:
+    summary = portfolio.summary()
+    lines = [
+        f"Total before cost:        ${summary.total_before_cost:,.2f}",
+        f"Total after cost:         ${summary.total_after_cost:,.2f}",
+        f"Total cost savings:       ${summary.total_cost_savings:,.2f}",
+        (
+            f"Portfolio ROI:            {summary.portfolio_roi_percentage:+.1f}%"
+            if summary.portfolio_roi_percentage is not None
+            else "Portfolio ROI:            n/a"
+        ),
+        f"Total wait time saved:    {summary.total_wait_minutes_saved:,.1f} minutes",
+    ]
+    if summary.total_implementation_cost > 0:
+        lines.append(f"Total implementation cost: ${summary.total_implementation_cost:,.2f}")
+        lines.append(
+            f"Payback (case-volume periods): {summary.payback_in_periods:.2f}"
+            if summary.payback_feasible and summary.payback_in_periods is not None
+            else "Payback (case-volume periods): not reached"
+        )
+    return lines
+
+
+def _build_portfolio_risks_section(portfolio: WorkflowPortfolio) -> list[str]:
+    lines = []
+    for entry in portfolio.entries:
+        for risk in build_risks(entry.diff):
+            if risk == "No material risks identified from the simulated metrics.":
+                continue
+            lines.append(f"[{entry.name}] {risk}")
+    if not lines:
+        lines.append("No material risks identified from the simulated metrics.")
+    return lines
+
+
+def _build_rollout_order_section(portfolio: WorkflowPortfolio, by: str) -> list[str]:
+    lines = []
+    for rank, entry in enumerate(portfolio.ranked(by=by), start=1):
+        lines.append(
+            f"{rank}. {entry.name} "
+            f"(${entry.diff.roi.total_cost_savings:,.2f} savings, "
+            f"{entry.diff.roi.roi_percentage:+.1f}% ROI)"
+            if entry.diff.roi.roi_percentage is not None
+            else f"{rank}. {entry.name} (${entry.diff.roi.total_cost_savings:,.2f} savings)"
+        )
+    return lines
+
+
+def generate_portfolio_report(
+    portfolio: WorkflowPortfolio, rank_by: str = "total_cost_savings"
+) -> str:
+    """Render a `WorkflowPortfolio` as a plain-text report for stakeholders.
+
+    The report ranks workflows by `rank_by` (see
+    `b2b_workflow_simulator.portfolio.RANK_BY_OPTIONS`), then presents an
+    executive summary, the ranking table, aggregate ROI and payback,
+    consolidated risks from every workflow, and a recommended rollout
+    order matching the ranking.
+    """
+    sections = [
+        "=" * 60,
+        "WORKFLOW PORTFOLIO ANALYSIS",
+        "=" * 60,
+        "",
+        "EXECUTIVE SUMMARY",
+        "-" * 60,
+        *_build_portfolio_executive_summary(portfolio),
+        "",
+        "WORKFLOW RANKING",
+        "-" * 60,
+        *_build_portfolio_ranking_table(portfolio, rank_by),
+        "",
+        "AGGREGATE ROI & PAYBACK",
+        "-" * 60,
+        *_build_portfolio_aggregate_section(portfolio),
+        "",
+        "RISKS",
+        "-" * 60,
+        *[f"  - {risk}" for risk in _build_portfolio_risks_section(portfolio)],
+        "",
+        "RECOMMENDED ROLLOUT ORDER",
+        "-" * 60,
+        *_build_rollout_order_section(portfolio, rank_by),
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "generate_report",
+    "generate_portfolio_report",
     "format_metric_value",
     "format_percent_change",
     "build_risks",
