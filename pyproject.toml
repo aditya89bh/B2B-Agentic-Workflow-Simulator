@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "b2b_workflow_simulator"
+version = "0.1.0"
+description = "A digital twin simulator for comparing human, AI-agent, and hybrid B2B workflows before implementation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "B2B Agentic Workflow Simulator Contributors" }]
+keywords = [
+    "workflow-simulation",
+    "ai-agents",
+    "digital-twin",
+    "process-optimization",
+    "roi-analysis",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Other Audience",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.4", "build>=1.0"]
+
+[project.scripts]
+b2b-simulator = "b2b_workflow_simulator.cli:main"
+
+[project.urls]
+Repository = "https://github.com/example/B2B-Agentic-Workflow-Simulator"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
