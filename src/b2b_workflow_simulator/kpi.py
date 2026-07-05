@@ -24,6 +24,17 @@ class KPIResult:
         node_visit_counts: Number of times each node was executed, keyed by node_id.
         node_failure_counts: Number of failures observed at each node, keyed by node_id.
         node_total_duration_minutes: Total minutes spent at each node, keyed by node_id.
+        total_wait_minutes: Sum of time cases spent queued for a busy or
+            over-capacity actor, across all cases. Zero when the run was not
+            capacity-aware (see `SimulationRunner`).
+        total_escalations: Number of AI agent tasks that were escalated to
+            a human rather than completed autonomously.
+        actor_busy_minutes: Total execution time consumed by each actor,
+            keyed by actor_id.
+        actor_wait_minutes: Total time cases spent waiting for each actor,
+            keyed by actor_id.
+        actor_utilization: Fraction (0.0-1.0+) of each actor's available
+            capacity that was consumed, keyed by actor_id.
     """
 
     workflow_name: str
@@ -32,9 +43,14 @@ class KPIResult:
     failed_cases: int = 0
     total_cost: float = 0.0
     total_duration_minutes: float = 0.0
+    total_wait_minutes: float = 0.0
+    total_escalations: int = 0
     node_visit_counts: dict[str, int] = field(default_factory=dict)
     node_failure_counts: dict[str, int] = field(default_factory=dict)
     node_total_duration_minutes: dict[str, float] = field(default_factory=dict)
+    actor_busy_minutes: dict[str, float] = field(default_factory=dict)
+    actor_wait_minutes: dict[str, float] = field(default_factory=dict)
+    actor_utilization: dict[str, float] = field(default_factory=dict)
 
     @property
     def completion_rate(self) -> float:
@@ -63,6 +79,20 @@ class KPIResult:
         if self.total_cases == 0:
             return 0.0
         return self.total_duration_minutes / self.total_cases
+
+    @property
+    def avg_wait_time_minutes(self) -> float:
+        """Average time per case spent queued for a busy or over-capacity actor."""
+        if self.total_cases == 0:
+            return 0.0
+        return self.total_wait_minutes / self.total_cases
+
+    @property
+    def escalation_rate(self) -> float:
+        """Fraction of cases that included at least one AI-to-human escalation."""
+        if self.total_cases == 0:
+            return 0.0
+        return self.total_escalations / self.total_cases
 
     def bottleneck_nodes(self, top_n: int = 3) -> list[tuple[str, float]]:
         """Return the `top_n` nodes with the highest total time spent.
