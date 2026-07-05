@@ -40,6 +40,7 @@ from b2b_workflow_simulator.report import (
     format_percent_change,
 )
 from b2b_workflow_simulator.sensitivity_grid import SensitivityGridResult
+from b2b_workflow_simulator.sla import SLAReport
 
 _STYLE = """
     <style>
@@ -542,6 +543,39 @@ def render_compliance_html(report: ComplianceReport) -> str:
     return _page(f"{report.workflow_name} - Compliance Report", body)
 
 
+def _sla_breach_cause_list(report: SLAReport) -> str:
+    causes = report.breach_causes()
+    if not causes:
+        return "<p>No breaches recorded.</p>"
+    items = "".join(
+        f"<li>{_escape(name)}: {count} breach(es)</li>" for name, count in sorted(causes.items())
+    )
+    return f"<ul>{items}</ul>"
+
+
+def render_sla_html(report: SLAReport) -> str:
+    """Render an `SLAReport` as a standalone HTML service-level report."""
+    penalty_line = (
+        f"<p>Estimated financial penalty: ${report.total_penalty:,.2f}</p>"
+        if report.total_penalty > 0
+        else ""
+    )
+    body = f"""
+  <h1>SLA Performance Analysis</h1>
+  <p class="subtitle">{_escape(report.workflow_name)} &mdash;
+  {report.rules_checked} rule(s) across {report.cases_evaluated} case(s)</p>
+
+  <p class="callout"><strong>Attainment rate: {report.attainment_rate:.1%}</strong>
+  &mdash; {report.breach_count} breach(es), averaging
+  {report.average_breach_minutes:,.1f} minute(s) over deadline</p>
+  {penalty_line}
+
+  <h2>Breach Causes</h2>
+  {_sla_breach_cause_list(report)}
+"""
+    return _page(f"{report.workflow_name} - SLA Report", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -552,4 +586,5 @@ __all__ = [
     "render_hiring_html",
     "render_policy_html",
     "render_compliance_html",
+    "render_sla_html",
 ]
