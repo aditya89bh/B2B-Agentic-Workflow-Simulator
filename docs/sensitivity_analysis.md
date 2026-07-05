@@ -6,6 +6,10 @@ analysis answers the follow-up question every stakeholder actually
 asks: "how confident should we be in those assumptions, and how much
 can they move before the answer changes?"
 
+This page covers varying one assumption at a time. For sweeping two
+assumptions together over a grid (e.g. AI cost and AI error rate moving
+in tandem), see `docs/advanced_sensitivity.md`.
+
 ## The sweep engine
 
 `run_sensitivity_sweep()` in `sensitivity.py` re-simulates a before/after
