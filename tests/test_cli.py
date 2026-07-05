@@ -292,6 +292,72 @@ def test_sensitivity_example_rejects_malformed_values():
     assert exit_code == 2
 
 
+def test_save_example_writes_before_and_after_json(tmp_path):
+    output_dir = tmp_path / "workflows"
+    exit_code = main(["save-example", "invoice-processing", "--output-dir", str(output_dir)])
+
+    assert exit_code == 0
+    before_path = output_dir / "invoice-processing-before.json"
+    after_path = output_dir / "invoice-processing-after.json"
+    assert before_path.exists()
+    assert after_path.exists()
+    json.loads(before_path.read_text())
+    json.loads(after_path.read_text())
+
+
+def test_save_example_rejects_unknown_example(tmp_path, capsys):
+    from b2b_workflow_simulator.cli import save_example
+
+    exit_code = save_example("not-a-real-example", str(tmp_path))
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_load_example_prints_kpi_summary_for_saved_workflow(tmp_path, capsys):
+    output_dir = tmp_path / "workflows"
+    main(["save-example", "invoice-processing", "--output-dir", str(output_dir)])
+    capsys.readouterr()
+
+    exit_code = main(
+        [
+            "load-example",
+            str(output_dir / "invoice-processing-after.json"),
+            "--cases",
+            "20",
+            "--seed",
+            "1",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Loaded workflow" in output
+    assert "Completion rate" in output
+
+
+def test_load_example_reports_error_for_missing_file(tmp_path, capsys):
+    missing_path = tmp_path / "does-not-exist.json"
+
+    exit_code = main(["load-example", str(missing_path)])
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Failed to load workflow" in error_output
+
+
+def test_load_example_reports_error_for_invalid_workflow(tmp_path, capsys):
+    bad_path = tmp_path / "bad.json"
+    bad_path.write_text(json.dumps({"not": "a workflow"}))
+
+    exit_code = main(["load-example", str(bad_path)])
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Failed to load workflow" in error_output
+
+
 def test_export_example_writes_json_files(tmp_path):
     output_dir = tmp_path / "exports"
     exit_code = main(
