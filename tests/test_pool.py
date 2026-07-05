@@ -81,6 +81,40 @@ def test_scheduler_queues_when_all_workers_are_busy():
     assert third.wait_minutes > 0.0
 
 
+def test_peek_earliest_start_matches_first_available_worker():
+    pool = build_pool()
+    scheduler = PoolScheduler()
+
+    peeked = scheduler.peek_earliest_start(pool, ready_time=0.0, sampled_base_duration=30.0)
+
+    assert peeked == 0.0
+
+
+def test_peek_earliest_start_does_not_reserve_any_worker():
+    pool = build_pool()
+    scheduler = PoolScheduler()
+    scheduler.schedule(pool, ready_time=0.0, sampled_base_duration=60.0)
+    scheduler.schedule(pool, ready_time=0.0, sampled_base_duration=60.0)
+
+    peeked = scheduler.peek_earliest_start(pool, ready_time=0.0, sampled_base_duration=30.0)
+    assert peeked == 60.0
+
+    # Peeking must not mutate any worker's state: a real schedule call
+    # still finds the same earliest slot.
+    outcome = scheduler.schedule(pool, ready_time=0.0, sampled_base_duration=30.0)
+    assert outcome.start == 60.0
+
+
+def test_peek_earliest_start_raises_when_no_worker_available():
+    pool = build_pool(
+        workers=[Worker(worker_id="a", name="Agent A", available=False)]
+    )
+    scheduler = PoolScheduler()
+
+    with pytest.raises(ValueError, match="no available workers"):
+        scheduler.peek_earliest_start(pool, ready_time=0.0, sampled_base_duration=30.0)
+
+
 def test_scheduler_skips_unavailable_workers():
     pool = build_pool(
         workers=[
