@@ -30,6 +30,7 @@ from b2b_workflow_simulator.report import (
     format_metric_value,
     format_percent_change,
 )
+from b2b_workflow_simulator.sensitivity_grid import SensitivityGridResult
 
 _STYLE = """
     <style>
@@ -49,6 +50,9 @@ _STYLE = """
       .callout { background: #f4f6f8; border-left: 4px solid #0b2540; padding: 0.75rem 1rem;
                  margin: 1rem 0; }
       .rank { font-weight: 600; color: #0b2540; }
+      td.region-safe { background: #e6f4ea; color: #146c2e; font-weight: 600; }
+      td.region-negative { background: #fdecea; color: #b3261e; font-weight: 600; }
+      td.region-unstable { background: #3a3a3a; color: #ffffff; font-weight: 600; }
     </style>
 """
 
@@ -315,9 +319,60 @@ def render_monte_carlo_comparison_html(result: MonteCarloComparisonResult) -> st
     return _page(f"{result.before_name} vs {result.after_name} - Monte Carlo Comparison", body)
 
 
+def _grid_roi_table(result: SensitivityGridResult) -> str:
+    header_cells = "".join(f"<th>{_escape(f'{x:.4g}')}</th>" for x in result.x_values)
+    rows = []
+    for y_value in result.y_values:
+        cells = []
+        for x_value in result.x_values:
+            point = result.point_at(x_value, y_value)
+            roi = point.diff.roi.roi_percentage
+            roi_str = f"{roi:+.1f}%" if roi is not None else "n/a"
+            region = result.classify_region(x_value, y_value)
+            cells.append(f'<td class="region-{region}">{_escape(roi_str)}</td>')
+        rows.append(f"<tr><th>{_escape(f'{y_value:.4g}')}</th>" + "".join(cells) + "</tr>")
+    corner = _escape(f"{result.y_parameter} \\ {result.x_parameter}")
+    return (
+        "<table>\n"
+        f"  <tr><th>{corner}</th>{header_cells}</tr>\n"
+        + "\n".join(rows)
+        + "\n</table>"
+    )
+
+
+def render_sensitivity_grid_html(result: SensitivityGridResult) -> str:
+    """Render a `SensitivityGridResult` as a standalone HTML report with a colored ROI matrix."""
+    total = len(result.points)
+    safe = len(result.safe_region_points())
+    negative = len(result.negative_region_points())
+    unstable = len(result.unstable_region_points())
+    region_summary = f"""
+  <ul>
+    <li>Safe operating region: {safe}/{total} combinations</li>
+    <li>Negative ROI region: {negative}/{total} combinations</li>
+    <li>Unstable region: {unstable}/{total} combinations</li>
+  </ul>
+"""
+    body = f"""
+  <h1>Multi-Parameter Sensitivity Analysis</h1>
+  <p class="subtitle">{_escape(result.x_parameter)} (columns) &times;
+  {_escape(result.y_parameter)} (rows) &mdash; {total} combinations simulated</p>
+
+  <h2>ROI Matrix</h2>
+  {_grid_roi_table(result)}
+
+  <h2>Operating Regions</h2>
+  {region_summary}
+"""
+    return _page(
+        f"{result.x_parameter} x {result.y_parameter} - Sensitivity Grid Report", body
+    )
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
     "render_monte_carlo_html",
     "render_monte_carlo_comparison_html",
+    "render_sensitivity_grid_html",
 ]
