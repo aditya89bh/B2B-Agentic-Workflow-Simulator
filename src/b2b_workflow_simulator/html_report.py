@@ -20,6 +20,7 @@ from b2b_workflow_simulator.capacity_planning import (
     HiringSimulationResult,
 )
 from b2b_workflow_simulator.compliance import ComplianceReport
+from b2b_workflow_simulator.executive_report import ExecutiveAssessment
 from b2b_workflow_simulator.monte_carlo import (
     COMPARISON_METRICS,
     KPI_METRICS,
@@ -678,6 +679,157 @@ def render_ai_adoption_html(assessment: AIAdoptionAssessment) -> str:
     return _page(f"{assessment.workflow_name} - AI Adoption Assessment", body)
 
 
+def _executive_kpi_list(kpi) -> str:
+    items = [
+        f"<li>Cases simulated: {kpi.total_cases}</li>",
+        f"<li>Completion rate: {kpi.completion_rate:.1%}</li>",
+        f"<li>Failure rate: {kpi.failure_rate:.1%}</li>",
+        f"<li>Total cost: ${kpi.total_cost:,.2f}</li>",
+        f"<li>Average cycle time: {kpi.avg_cycle_time_minutes:,.1f} minutes</li>",
+        f"<li>Average wait time: {kpi.avg_wait_time_minutes:,.1f} minutes</li>",
+        f"<li>Escalation rate: {kpi.escalation_rate:.1%}</li>",
+    ]
+    return f"<ul>{''.join(items)}</ul>"
+
+
+def _executive_roi_section(diff: RedesignDiff | None) -> str:
+    if diff is None:
+        return "<p>No redesign comparison supplied; ROI section omitted.</p>"
+    items = [
+        f"<li>Comparing '{_escape(diff.before_name)}' against "
+        f"'{_escape(diff.after_name)}'.</li>",
+        f"<li>Total cost savings: ${diff.roi.total_cost_savings:,.2f}</li>",
+    ]
+    if diff.roi.roi_percentage is not None:
+        items.append(f"<li>ROI: {diff.roi.roi_percentage:+.1f}%</li>")
+    if diff.roi.implementation_cost is not None:
+        items.append(f"<li>Implementation cost: ${diff.roi.implementation_cost:,.2f}</li>")
+        if diff.roi.payback_feasible and diff.roi.payback_in_cases is not None:
+            items.append(f"<li>Payback: ~{diff.roi.payback_in_cases:,.0f} cases</li>")
+        else:
+            items.append("<li>Payback: not reached under simulated assumptions</li>")
+    return f"<ul>{''.join(items)}</ul>"
+
+
+def _executive_sla_section(sla_report: SLAReport | None) -> str:
+    if sla_report is None:
+        return "<p>No SLA rules supplied; SLA section omitted.</p>"
+    penalty_line = (
+        f"<li>Estimated financial penalty: ${sla_report.total_penalty:,.2f}</li>"
+        if sla_report.total_penalty > 0
+        else ""
+    )
+    return (
+        "<ul>"
+        f"<li>Attainment rate: {sla_report.attainment_rate:.1%}</li>"
+        f"<li>Breaches: {sla_report.breach_count}</li>"
+        f"<li>Average breach duration: {sla_report.average_breach_minutes:,.1f} minutes</li>"
+        f"{penalty_line}"
+        "</ul>"
+    )
+
+
+def _executive_compliance_section(compliance_report: ComplianceReport | None) -> str:
+    if compliance_report is None:
+        return "<p>No compliance requirements supplied; compliance section omitted.</p>"
+    return (
+        "<ul>"
+        f"<li>Compliance score: {compliance_report.compliance_score:.1f}%</li>"
+        f"<li>Violations: {compliance_report.violation_count}</li>"
+        f"<li>Audit findings: {len(compliance_report.audit_findings)}</li>"
+        "</ul>"
+    )
+
+
+def _executive_policy_section(policy_evaluation: PolicyEvaluation | None) -> str:
+    if policy_evaluation is None:
+        return "<p>No policies supplied; policy violation section omitted.</p>"
+    return (
+        "<ul>"
+        f"<li>Policies checked: {policy_evaluation.policies_checked}</li>"
+        f"<li>Violations: {policy_evaluation.violation_count} "
+        f"({policy_evaluation.error_count} error(s), "
+        f"{policy_evaluation.warning_count} warning(s))</li>"
+        "</ul>"
+    )
+
+
+def _executive_recommendation_section(recommendations, top_n: int = 5) -> str:
+    if not recommendations.recommendations:
+        return "<p>No actionable recommendations at this time.</p>"
+    cards = "".join(
+        f"""
+  <div class="callout">
+    <p><strong>{index}. {_escape(rec.title)}</strong>
+    &mdash; {_escape(rec.confidence)} confidence</p>
+    <p>{_escape(rec.reasoning)}</p>
+  </div>
+"""
+        for index, rec in enumerate(recommendations.recommendations[:top_n], start=1)
+    )
+    remaining = len(recommendations.recommendations) - top_n
+    if remaining > 0:
+        cards += f"<p>...and {remaining} more recommendation(s).</p>"
+    return cards
+
+
+def _executive_ai_adoption_section(ai_adoption: AIAdoptionAssessment) -> str:
+    return f"""
+  <p class="callout"><strong>Readiness index: {ai_adoption.readiness_index:.1f}/100</strong>
+  &mdash; Recommendation: <strong>
+  {_escape(RECOMMENDATION_LABELS[ai_adoption.recommendation])}</strong></p>
+  <ul>
+    <li>Automation readiness: {ai_adoption.automation_readiness:.1f}/100</li>
+    <li>AI maturity: {ai_adoption.ai_maturity:.1f}/100</li>
+    <li>Human dependency: {ai_adoption.human_dependency:.1f}/100</li>
+    <li>Governance: {ai_adoption.governance_score:.1f}/100</li>
+    <li>Explainability: {ai_adoption.explainability_score:.1f}/100</li>
+    <li>Rollout complexity: {ai_adoption.rollout_complexity:.1f}/100</li>
+  </ul>
+"""
+
+
+def render_executive_html(assessment: ExecutiveAssessment) -> str:
+    """Render an `ExecutiveAssessment` as a single standalone HTML report.
+
+    This combines KPI, ROI, SLA, compliance, policy, organizational risk,
+    recommendation, and AI adoption sections into one document, mirroring
+    `executive_report.generate_executive_report`'s plain-text structure.
+    """
+    body = f"""
+  <h1>Executive Assessment Report</h1>
+  <p class="subtitle">{_escape(assessment.workflow_name)}</p>
+
+  <h2>KPI Summary</h2>
+  {_executive_kpi_list(assessment.kpi)}
+
+  <h2>ROI</h2>
+  {_executive_roi_section(assessment.redesign_diff)}
+
+  <h2>SLA Performance</h2>
+  {_executive_sla_section(assessment.sla_report)}
+
+  <h2>Compliance</h2>
+  {_executive_compliance_section(assessment.compliance_report)}
+
+  <h2>Policy Violations</h2>
+  {_executive_policy_section(assessment.policy_evaluation)}
+
+  <h2>Organizational Risk</h2>
+  <p class="callout"><strong>Overall risk score:
+  {assessment.risk_assessment.overall_score:.1f}/100</strong></p>
+  {_risk_category_table(assessment.risk_assessment)}
+  {_risk_factor_list(assessment.risk_assessment)}
+
+  <h2>Recommendations</h2>
+  {_executive_recommendation_section(assessment.recommendations)}
+
+  <h2>AI Adoption Assessment</h2>
+  {_executive_ai_adoption_section(assessment.ai_adoption)}
+"""
+    return _page(f"{assessment.workflow_name} - Executive Assessment", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -692,4 +844,5 @@ __all__ = [
     "render_risk_html",
     "render_recommendation_html",
     "render_ai_adoption_html",
+    "render_executive_html",
 ]
