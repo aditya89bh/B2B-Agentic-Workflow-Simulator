@@ -22,6 +22,39 @@ def test_add_node_requires_known_actor():
         workflow.add_node(Node(node_id="start", name="Start", actor_id="rep"))
 
 
+def test_add_node_requires_known_additional_actors():
+    workflow = Workflow(workflow_id="wf1", name="Simple", entry_node_id="start")
+    workflow.add_actor(HumanActor(actor_id="manager", name="Manager"))
+
+    with pytest.raises(ValueError, match="unknown actor 'legal'"):
+        workflow.add_node(
+            Node(
+                node_id="start",
+                name="Start",
+                actor_id="manager",
+                additional_actor_ids=("legal",),
+            )
+        )
+
+
+def test_add_node_accepts_known_additional_actors():
+    workflow = Workflow(workflow_id="wf1", name="Simple", entry_node_id="start")
+    workflow.add_actor(HumanActor(actor_id="manager", name="Manager"))
+    workflow.add_actor(HumanActor(actor_id="legal", name="Legal"))
+
+    workflow.add_node(
+        Node(
+            node_id="start",
+            name="Start",
+            actor_id="manager",
+            additional_actor_ids=("legal",),
+            is_terminal=True,
+        )
+    )
+
+    assert workflow.get_node("start").additional_actor_ids == ("legal",)
+
+
 def test_add_edge_requires_known_nodes():
     workflow = Workflow(workflow_id="wf1", name="Simple", entry_node_id="start")
     workflow.add_actor(HumanActor(actor_id="rep", name="Rep"))
