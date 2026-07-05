@@ -49,6 +49,15 @@ returns a `KPIResult`. Because the same seed produces the same outcome,
 interval switches on capacity-aware simulation: actors become shared,
 finite resources that queue work and can be overloaded, exactly like a
 real team or a rate-limited AI service (see `docs/capacity_modeling.md`).
+An optional discrete-event engine (`engine="discrete"`) processes every
+case through a single global, time-ordered event queue instead of one
+case at a time, for a more general model of contention under heavy or
+bursty load (see `docs/discrete_event_engine.md`); richer arrival
+patterns -- uniform-random, batched, business-hour, and peak-hour --
+are available via `ArrivalModel`. Capacity can also be modeled as an
+**`ActorPool`** of several interchangeable `Worker`s with their own
+cost, speed, reliability, and shift schedule, routed by least-loaded
+scheduling instead of a single fixed actor (see `docs/team_capacity.md`).
 
 On top of a simulation run, a **redesign diff engine** compares a
 "before" and "after" `KPIResult` pair into a structured `RedesignDiff`
@@ -67,9 +76,24 @@ cost) to find the break-even point where a redesign stops paying off
 (see `docs/sensitivity_analysis.md`). Workflow definitions can be
 persisted as JSON with lightweight structural validation, so they can
 be authored, shared, or version-controlled outside of Python code (see
-`docs/json_workflows.md`). Both a single redesign diff and a full
-portfolio can also be rendered as a clean, self-contained HTML report
-for sharing with stakeholders who won't run the CLI.
+`docs/json_workflows.md`). Every report type -- redesign diffs,
+portfolios, Monte Carlo analysis, sensitivity grids, and capacity plans
+-- can also be rendered as a clean, self-contained HTML report for
+sharing with stakeholders who won't run the CLI.
+
+Beyond a single seeded run, a **Monte Carlo engine** re-simulates a
+workflow (or a before/after pair) across many seeds and reports mean,
+min, max, median, and P10/P90 for every KPI, ROI, and payback, with an
+executive summary explaining how much confidence to place in the
+result (see `docs/monte_carlo.md`). A **two-parameter sensitivity
+grid** extends the single-parameter sweep to a full ROI matrix across
+combinations of two assumptions moving together, classifying every
+combination as a safe, negative-ROI, or operationally unstable
+operating region (see `docs/advanced_sensitivity.md`). A **capacity
+planning engine** turns simulated utilization into concrete staffing
+recommendations -- overloaded, underutilized, or balanced against a
+target -- and lets you simulate the effect of a specific hire before
+committing to it (see `docs/capacity_planning.md`).
 
 ## Bundled examples
 
@@ -150,6 +174,22 @@ b2b-simulator load-example workflows/invoice-processing-after.json
 
 # Write a static, shareable HTML redesign report.
 b2b-simulator html-report-example invoice-processing --output report.html
+
+# Run with the discrete-event engine instead of the default sequential one.
+b2b-simulator run-example sales-lead-qualification --engine discrete
+
+# Monte Carlo: re-simulate across many seeds and report variability, ROI, and payback.
+b2b-simulator monte-carlo-example invoice-processing --seeds 1,2,3,4,5 --implementation-cost 8000
+b2b-simulator monte-carlo-portfolio sales-lead-qualification invoice-processing --seeds 1,2,3,4,5
+
+# Two-parameter sensitivity grid: ROI matrix and safe/negative/unstable regions.
+b2b-simulator sensitivity-grid-example invoice-processing \
+  --x-parameter ai_error_rate --x-values 0,0.1,0.2,0.3 \
+  --y-parameter ai_cost_per_execution --y-values 0,5,10,20
+
+# Capacity planning: staffing recommendations and raw utilization figures.
+b2b-simulator capacity-analysis invoice-processing --arrival-interval 10
+b2b-simulator team-utilization invoice-processing --arrival-interval 10
 ```
 
 Example `run-example` output:
@@ -188,23 +228,32 @@ python -m build
 
 ```
 src/b2b_workflow_simulator/
-    primitives/          Node, Edge, Actor, HumanActor, AIAgentActor, Task, Event, DurationModel
+    primitives/          Node, Edge, Actor, HumanActor, AIAgentActor, Task, Event,
+                         DurationModel, Worker, Shift
     workflow.py           Workflow graph model with validation
     workflow_io.py          JSON persistence + stdlib schema validation for workflows
     capacity.py               ActorScheduler: queueing and daily capacity limits
+    arrivals.py                 ArrivalModel: non-uniform case arrival patterns
+    pool.py                       ActorPool + PoolScheduler: team-based capacity
+    queueing.py                     Queue depth, growth/collapse, throughput analysis
+    discrete_event.py                 DiscreteEventEngine: global priority-queue simulation
     kpi.py                     KPIResult aggregation object
-    simulation.py                SimulationRunner
+    simulation.py                SimulationRunner (dispatches to the discrete-event engine)
     redesign.py                    Redesign diff engine (before/after comparison, ROI, payback)
     portfolio.py                     WorkflowPortfolio: multi-workflow aggregation and ranking
     sensitivity.py                     Sweep engine and break-even detection
-    report.py                            Plain-text ROI and portfolio report generators
+    sensitivity_grid.py                  Two-parameter sensitivity grids and region classification
+    monte_carlo.py                         Repeated seeded runs and percentile statistics
+    capacity_planning.py                     Staffing recommendations and hiring simulation
+    report.py                            Plain-text report generators for every analysis type
     html_report.py                         Static HTML report renderer
     export.py                                JSON/CSV export for events, KPIs, and comparisons
     examples/                                   Bundled example workflows + sample JSON definitions
     cli.py                                        Command-line entry point
 tests/                    Unit tests for every module above
-docs/                     Architecture, capacity modeling, redesign analysis, portfolio analysis,
-                          sensitivity analysis, and JSON workflow documentation
+docs/                     Architecture, capacity modeling, redesign/portfolio/sensitivity
+                          analysis, JSON workflows, discrete-event engine, team capacity,
+                          Monte Carlo, advanced sensitivity, and capacity planning
 ```
 
 ## Status
@@ -213,12 +262,20 @@ Phase 1 established the core domain model, a working simulation runner,
 and a single business example end to end. Phase 2 added capacity-aware
 queueing, realistic duration variance, a structured redesign diff engine
 with ROI/payback analysis, plain-text reporting, JSON/CSV export, and a
-second business example (invoice processing). Phase 3 adds a third
+second business example (invoice processing). Phase 3 added a third
 business example (customer support ticket resolution), a workflow
 portfolio model for evaluating multiple redesigns together, a
 sensitivity/break-even sweep engine, JSON persistence for workflow
 definitions, and static HTML reports for both single-workflow and
-portfolio results.
+portfolio results. Phase 4 turns the simulator into an enterprise-grade
+process modeling engine: an optional discrete-event execution engine
+with a global priority queue; richer arrival patterns (uniform,
+batched, business-hour, peak-hour); team-based capacity via
+`ActorPool`/`Worker`/`Shift` with least-loaded routing and overtime;
+Monte Carlo analysis across many seeds with percentile statistics;
+two-parameter sensitivity grids with safe/negative/unstable region
+classification; and a capacity planning engine for staffing
+recommendations and hiring simulations.
 
 ## License
 
