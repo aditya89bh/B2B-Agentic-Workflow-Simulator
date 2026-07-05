@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html
 
+from b2b_workflow_simulator.ai_adoption import RECOMMENDATION_LABELS, AIAdoptionAssessment
 from b2b_workflow_simulator.capacity_planning import (
     BALANCED,
     OVERLOADED,
@@ -649,6 +650,34 @@ def render_recommendation_html(recommendation_set: RecommendationSet) -> str:
     return _page(f"{recommendation_set.workflow_name} - Recommendations", body)
 
 
+def render_ai_adoption_html(assessment: AIAdoptionAssessment) -> str:
+    """Render an `AIAdoptionAssessment` as a standalone HTML report."""
+    reasoning_items = "".join(f"<li>{_escape(reason)}</li>" for reason in assessment.reasoning)
+    body = f"""
+  <h1>AI Adoption Assessment</h1>
+  <p class="subtitle">{_escape(assessment.workflow_name)}</p>
+
+  <p class="callout"><strong>Readiness index: {assessment.readiness_index:.1f}/100</strong>
+  &mdash; Recommendation: <strong>{_escape(RECOMMENDATION_LABELS[assessment.recommendation])}
+  </strong></p>
+
+  <h2>Scores</h2>
+  <table>
+    <tr><th>Dimension</th><th>Score</th></tr>
+    <tr><td>Automation readiness</td><td>{assessment.automation_readiness:.1f}/100</td></tr>
+    <tr><td>AI maturity</td><td>{assessment.ai_maturity:.1f}/100</td></tr>
+    <tr><td>Human dependency</td><td>{assessment.human_dependency:.1f}/100</td></tr>
+    <tr><td>Governance</td><td>{assessment.governance_score:.1f}/100</td></tr>
+    <tr><td>Explainability</td><td>{assessment.explainability_score:.1f}/100</td></tr>
+    <tr><td>Rollout complexity</td><td>{assessment.rollout_complexity:.1f}/100</td></tr>
+  </table>
+
+  <h2>Reasoning</h2>
+  <ul>{reasoning_items}</ul>
+"""
+    return _page(f"{assessment.workflow_name} - AI Adoption Assessment", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -662,4 +691,5 @@ __all__ = [
     "render_sla_html",
     "render_risk_html",
     "render_recommendation_html",
+    "render_ai_adoption_html",
 ]
