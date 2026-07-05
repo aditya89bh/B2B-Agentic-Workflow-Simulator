@@ -292,6 +292,59 @@ def test_sensitivity_example_rejects_malformed_values():
     assert exit_code == 2
 
 
+def test_html_report_example_writes_html_file(tmp_path, capsys):
+    output_path = tmp_path / "report.html"
+    exit_code = main(
+        [
+            "html-report-example",
+            "sales-lead-qualification",
+            "--cases",
+            "20",
+            "--seed",
+            "1",
+            "--output",
+            str(output_path),
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert content.startswith("<!DOCTYPE html>")
+    assert "HTML report written" in output
+
+
+def test_html_report_example_includes_payback_with_implementation_cost(tmp_path):
+    output_path = tmp_path / "report.html"
+    main(
+        [
+            "html-report-example",
+            "invoice-processing",
+            "--cases",
+            "50",
+            "--seed",
+            "1",
+            "--implementation-cost",
+            "1000",
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert "Payback" in output_path.read_text()
+
+
+def test_html_report_example_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import html_report_example
+
+    exit_code = html_report_example("not-a-real-example", 10, 1, None, None, "out.html")
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
 def test_save_example_writes_before_and_after_json(tmp_path):
     output_dir = tmp_path / "workflows"
     exit_code = main(["save-example", "invoice-processing", "--output-dir", str(output_dir)])
