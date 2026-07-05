@@ -4,6 +4,8 @@ from b2b_workflow_simulator.capacity_planning import (
     BALANCED,
     OVERLOADED,
     analyze_capacity,
+    generate_capacity_report,
+    generate_hiring_report,
     simulate_hiring,
 )
 from b2b_workflow_simulator.kpi import KPIResult
@@ -167,3 +169,39 @@ class TestSimulateHiring:
             engine="discrete",
         )
         assert result.proposed_worker_count == 2
+
+
+class TestGenerateCapacityReport:
+    def test_includes_workflow_name_and_recommendations(self):
+        kpi = KPIResult(
+            workflow_name="Support Ops", actor_utilization={"agent": 0.95, "reviewer": 0.2}
+        )
+        plan = analyze_capacity(kpi)
+        report = generate_capacity_report(plan)
+        assert "Support Ops" in report
+        assert "agent" in report
+        assert "reviewer" in report
+        assert "STAFFING RECOMMENDATIONS" in report
+
+    def test_handles_empty_plan_gracefully(self):
+        kpi = KPIResult(workflow_name="Empty Ops")
+        plan = analyze_capacity(kpi)
+        report = generate_capacity_report(plan)
+        assert "No capacity-aware utilization data" in report
+
+
+class TestGenerateHiringReport:
+    def test_includes_pool_and_headcount_change(self):
+        extra = [Worker(worker_id="w-extra", name="Extra", hourly_cost=40.0)]
+        result = simulate_hiring(
+            lambda: build_pool_workflow(num_workers=1),
+            "team",
+            extra,
+            num_cases=20,
+            seed=1,
+            arrival_interval_minutes=5.0,
+        )
+        report = generate_hiring_report(result)
+        assert "team" in report
+        assert "1 -> 2" in report
+        assert "IMPACT" in report
