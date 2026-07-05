@@ -188,9 +188,7 @@ def sales_lead_qualification_policies() -> list[Policy]:
         EscalationPolicy(
             name="research-escalation-path",
             node_id="initial_research",
-            description=(
-                "An automated research step must have a reachable human escalation path."
-            ),
+            description=("An automated research step must have a reachable human escalation path."),
         ),
         SeparationOfDutiesPolicy(
             name="intake-handoff-segregation",
