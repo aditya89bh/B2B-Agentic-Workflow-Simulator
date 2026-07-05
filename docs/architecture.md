@@ -12,20 +12,28 @@ definition, not in the engine.
 ## Layers
 
 ```
-primitives/   Data-only building blocks (Node, Edge, Actor, Task, Event)
+primitives/   Data-only building blocks (Node, Edge, Actor, Task, Event, DurationModel)
 workflow.py   Graph structure + structural validation
-simulation.py Execution engine (stateless, seeded RNG)
+capacity.py   ActorScheduler: per-actor queueing and daily capacity limits
 kpi.py        Aggregation of simulation output into business metrics
+simulation.py Execution engine (stateless aside from its seeded RNG)
+redesign.py   Before/after comparison of two KPIResult objects, plus ROI
+report.py     Plain-text rendering of a RedesignDiff
+export.py     JSON/CSV serialization of events, KPIs, and diffs
 examples/     Concrete, business-realistic Workflow instances
 cli.py        Thin argument-parsing layer over the above
 ```
 
-Each layer only depends on the ones above it in this list. `primitives`
-has no dependencies within the package. `workflow.py` depends only on
-`primitives`. `simulation.py` depends on `primitives`, `workflow.py`, and
-`kpi.py`. This keeps the domain model usable without pulling in
-simulation or CLI concerns, which matters as the project grows (e.g. a
-future web UI could import `workflow.py` and `kpi.py` directly).
+Each layer only depends on the ones listed above it. `primitives` has no
+dependencies within the package. `workflow.py` and `capacity.py` depend
+only on `primitives`. `kpi.py` is standalone data. `simulation.py`
+depends on `primitives`, `workflow.py`, `capacity.py`, and `kpi.py`.
+`redesign.py` depends only on `kpi.py`, so a `RedesignDiff` can be built
+from any two `KPIResult` objects without touching the simulation engine
+at all -- useful for testing and for future integrations that produce
+KPIs some other way. `report.py` and `export.py` both depend only on
+`redesign.py` (and `kpi.py`/`primitives` for export), keeping "how we
+compute results" fully separate from "how we present them."
 
 ## Node and Edge: the graph
 
@@ -59,20 +67,26 @@ behave in practice:
 
 ## Simulation model
 
-`SimulationRunner.run(workflow, num_cases)` simulates `num_cases`
-independent cases. Each case starts at `workflow.entry_node_id` and
-repeats the following until it reaches a terminal node or fails:
+`SimulationRunner.run(workflow, num_cases, arrival_interval_minutes=None)`
+simulates `num_cases` cases. Each case starts at `workflow.entry_node_id`
+and repeats the following until it reaches a terminal node or fails:
 
 1. Resolve the node's assigned actor.
-2. Compute duration (`node.base_duration_minutes * actor.speed_multiplier`)
-   and cost (`actor.cost_for_duration(duration)`).
-3. Roll against `actor.error_rate` to decide whether the task fails; a
+2. Sample a duration from the node's `DurationModel` (fixed by default)
+   and scale it by `actor.speed_multiplier`; compute cost via
+   `actor.cost_for_duration(duration)`.
+3. If `arrival_interval_minutes` was given, ask the run's `ActorScheduler`
+   when this actor can actually start the task -- this is where queueing
+   and daily capacity limits are enforced (see `docs/capacity_modeling.md`).
+   Otherwise the actor is always immediately available, matching Phase 1
+   behavior exactly.
+4. Roll against `actor.error_rate` to decide whether the task fails; a
    failure ends the case immediately as a `CASE_FAILED` event.
-4. If the actor is an `AIAgentActor`, roll against `escalation_rate` to
+5. If the actor is an `AIAgentActor`, roll against `escalation_rate` to
    decide whether the task is marked `ESCALATED` (still counted as
    progressing the case, but flagged distinctly for reporting).
-5. If the node is terminal, end the case as `CASE_COMPLETED`.
-6. Otherwise, choose the next node from the node's outgoing edges,
+6. If the node is terminal, end the case as `CASE_COMPLETED`.
+7. Otherwise, choose the next node from the node's outgoing edges,
    weighted by `probability`, using the run's seeded RNG.
 
 All of this is driven by a single `random.Random` instance seeded at
@@ -83,19 +97,34 @@ comparisons as controlled experiments rather than noisy one-off samples.
 ## KPI aggregation
 
 `KPIResult` accumulates simple counters and totals during the run
-(cases, cost, duration, per-node visit/failure/duration counts) and
-exposes derived business metrics (`completion_rate`, `failure_rate`,
-`avg_cost_per_case`, `avg_cycle_time_minutes`, `bottleneck_nodes()`) as
+(cases, cost, duration, wait time, escalations, per-node and per-actor
+breakdowns) and exposes derived business metrics (`completion_rate`,
+`failure_rate`, `avg_cost_per_case`, `avg_cycle_time_minutes`,
+`avg_wait_time_minutes`, `escalation_rate`, `bottleneck_nodes()`) as
 computed properties rather than stored fields, so there is exactly one
 source of truth for each number.
 
-## What Phase 1 deliberately leaves out
+## Redesign diff and reporting
 
-- Capacity/staffing constraints (e.g. an actor can only work N hours/day).
-- Parallel or concurrent node execution.
-- Cost/time distributions (durations are currently deterministic given a
-  node and actor, not sampled from a distribution).
+`compare_workflows(before, after, implementation_cost=None)` in
+`redesign.py` takes two `KPIResult` objects and produces a `RedesignDiff`:
+a `MetricDelta` for each headline metric (before, after, absolute delta,
+percent change), the top bottleneck nodes on each side, per-actor
+utilization on each side, and an `ROIAnalysis` (total and per-case cost
+savings, ROI percentage, and payback in cases if an implementation cost
+was supplied). `report.py`'s `generate_report()` renders a `RedesignDiff`
+as a plain-text report with an executive summary, a KPI table, bottleneck
+and utilization sections, a heuristic-driven risks list, and a closing
+recommendation. `export.py` serializes the same underlying data
+(events, `KPIResult`, `RedesignDiff`) to JSON or CSV for downstream tools.
+
+## What Phase 2 deliberately leaves out
+
+- True concurrent, event-driven scheduling across cases (the capacity
+  model processes cases in arrival order rather than running a full
+  discrete-event simulation with a global event heap).
 - Persistence, a web UI, or workflow authoring tools.
+- Multi-currency or time-zone-aware cost/scheduling models.
 
-These are natural extensions for later phases once the core model has
-proven itself on more examples.
+These remain natural extensions for later phases once the redesign and
+capacity model have proven themselves on more examples.
