@@ -8,12 +8,88 @@ from dataclasses import dataclass, field
 from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.capacity import ActorScheduler
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.pool import ActorPool, PoolScheduler
+from b2b_workflow_simulator.primitives.actor import Actor
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
 from b2b_workflow_simulator.primitives.event import Event, EventType
 from b2b_workflow_simulator.primitives.task import Task
 from b2b_workflow_simulator.workflow import Workflow
 
 ENGINES = ("simple", "discrete")
+
+
+@dataclass(frozen=True)
+class ScheduledExecution:
+    """Everything needed to record one task's outcome, resolved up front.
+
+    Produced by `schedule_task_execution`, which is the single place both
+    engines go to find out *when* a task runs and *who* (which actor, or
+    which worker within a pool) runs it -- so pool-routing logic lives in
+    exactly one place rather than being duplicated per engine.
+    """
+
+    start: float
+    end: float
+    wait_minutes: float
+    duration: float
+    cost: float
+    error_rate: float
+    escalation_rate: float
+    checks_escalation: bool
+    worker_id: str | None = None
+
+
+def schedule_task_execution(
+    node_actor: Actor,
+    sampled_base_duration: float,
+    ready_time: float,
+    scheduler: ActorScheduler | None,
+    pool_scheduler: PoolScheduler,
+) -> ScheduledExecution:
+    """Resolve timing, cost, and failure/escalation rates for one task.
+
+    If `node_actor` is an `ActorPool`, routing is delegated to
+    `pool_scheduler`, which always enforces shift- and day-aware capacity
+    regardless of whether the run is otherwise capacity-aware. Otherwise,
+    behavior matches the original single-actor model: immediate execution
+    if `scheduler` is `None`, or `ActorScheduler`-managed queueing if not.
+    """
+    if isinstance(node_actor, ActorPool):
+        scheduled = pool_scheduler.schedule(node_actor, ready_time, sampled_base_duration)
+        worker = node_actor.get_worker(scheduled.worker_id)
+        return ScheduledExecution(
+            start=scheduled.start,
+            end=scheduled.end,
+            wait_minutes=scheduled.wait_minutes,
+            duration=scheduled.duration,
+            cost=scheduled.cost,
+            error_rate=worker.error_rate,
+            escalation_rate=0.0,
+            checks_escalation=False,
+            worker_id=scheduled.worker_id,
+        )
+
+    duration = sampled_base_duration * node_actor.speed_multiplier
+    cost = node_actor.cost_for_duration(duration)
+    if scheduler is not None:
+        scheduled_task = scheduler.schedule(
+            node_actor.actor_id, ready_time, duration, node_actor.available_hours_per_day
+        )
+        start, end, wait = scheduled_task.start, scheduled_task.end, scheduled_task.wait_minutes
+    else:
+        start, end, wait = ready_time, ready_time + duration, 0.0
+
+    is_ai_agent = isinstance(node_actor, AIAgentActor)
+    return ScheduledExecution(
+        start=start,
+        end=end,
+        wait_minutes=wait,
+        duration=duration,
+        cost=cost,
+        error_rate=node_actor.error_rate,
+        escalation_rate=node_actor.escalation_rate if is_ai_agent else 0.0,
+        checks_escalation=is_ai_agent,
+    )
 
 
 def resolve_arrival_times(
@@ -72,6 +148,19 @@ def record_actor_utilization(
         kpi.actor_utilization[actor_id] = scheduler.utilization(
             actor_id, actor.available_hours_per_day
         )
+
+
+def record_pool_utilization(
+    workflow: Workflow, kpi: KPIResult, pool_scheduler: PoolScheduler
+) -> None:
+    """Populate per-pool and per-worker utilization from a pool scheduler's final state."""
+    for pool_id in pool_scheduler.known_pool_ids():
+        pool = workflow.get_actor(pool_id)
+        kpi.pool_utilization[pool_id] = pool_scheduler.pool_utilization(pool)
+        kpi.worker_utilization[pool_id] = {
+            worker_id: pool_scheduler.worker_utilization(pool, worker_id)
+            for worker_id in pool_scheduler.known_worker_ids(pool_id)
+        }
 
 
 class SimulationRunner:
@@ -166,15 +255,17 @@ class SimulationRunner:
         events: list[Event] = []
         kpi = KPIResult(workflow_name=workflow.name)
         scheduler = ActorScheduler() if arrival_times is not None else None
+        pool_scheduler = PoolScheduler()
 
         for case_index in range(num_cases):
             case_id = f"case-{case_index + 1}"
             arrival_time = arrival_times[case_index] if arrival_times is not None else 0.0
-            self._run_case(workflow, case_id, arrival_time, events, kpi, scheduler)
+            self._run_case(workflow, case_id, arrival_time, events, kpi, scheduler, pool_scheduler)
 
         kpi.total_cases = num_cases
         if scheduler is not None:
             record_actor_utilization(workflow, kpi, scheduler)
+        record_pool_utilization(workflow, kpi, pool_scheduler)
 
         return SimulationResult(workflow_name=workflow.name, events=events, kpi=kpi)
 
@@ -186,6 +277,7 @@ class SimulationRunner:
         events: list[Event],
         kpi: KPIResult,
         scheduler: ActorScheduler | None,
+        pool_scheduler: PoolScheduler,
     ) -> None:
         clock = arrival_time
         current_node_id = workflow.entry_node_id
@@ -201,14 +293,17 @@ class SimulationRunner:
                 case_id=case_id,
             )
             sampled_base = node.duration_model.sample(self._rng, node.base_duration_minutes)
-            duration = sampled_base * actor.speed_multiplier
-            cost = actor.cost_for_duration(duration)
+            is_pool = isinstance(actor, ActorPool)
+            tracks_capacity = scheduler is not None or is_pool
 
-            if scheduler is not None:
-                scheduled = scheduler.schedule(
-                    actor.actor_id, clock, duration, actor.available_hours_per_day
-                )
-                start, end, wait = scheduled.start, scheduled.end, scheduled.wait_minutes
+            scheduled = schedule_task_execution(
+                actor, sampled_base, clock, scheduler, pool_scheduler
+            )
+            start, end, wait = scheduled.start, scheduled.end, scheduled.wait_minutes
+            duration, cost = scheduled.duration, scheduled.cost
+            details = {"worker_id": scheduled.worker_id} if scheduled.worker_id else {}
+
+            if tracks_capacity:
                 kpi.total_wait_minutes += wait
                 kpi.actor_wait_minutes[actor.actor_id] = (
                     kpi.actor_wait_minutes.get(actor.actor_id, 0.0) + wait
@@ -221,18 +316,16 @@ class SimulationRunner:
                             case_id,
                             node.node_id,
                             actor.actor_id,
-                            {"wait_minutes": wait},
+                            {**details, "wait_minutes": wait},
                         )
                     )
-            else:
-                start, end = clock, clock + duration
 
             kpi.node_visit_counts[node.node_id] = kpi.node_visit_counts.get(node.node_id, 0) + 1
             events.append(
-                Event(EventType.TASK_STARTED, start, case_id, node.node_id, actor.actor_id)
+                Event(EventType.TASK_STARTED, start, case_id, node.node_id, actor.actor_id, details)
             )
 
-            if self._rng.random() < actor.error_rate:
+            if self._rng.random() < scheduled.error_rate:
                 task.mark_failed(duration, cost, reason="actor_error")
                 record_task_totals(kpi, node.node_id, duration, cost)
                 kpi.node_failure_counts[node.node_id] = (
@@ -245,10 +338,10 @@ class SimulationRunner:
                         case_id,
                         node.node_id,
                         actor.actor_id,
-                        {"reason": "actor_error"},
+                        {**details, "reason": "actor_error"},
                     )
                 )
-                if scheduler is not None:
+                if tracks_capacity:
                     events.append(
                         Event(
                             EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id
@@ -259,7 +352,7 @@ class SimulationRunner:
                 kpi.total_duration_minutes += end - arrival_time
                 return
 
-            if isinstance(actor, AIAgentActor) and self._rng.random() < actor.escalation_rate:
+            if scheduled.checks_escalation and self._rng.random() < scheduled.escalation_rate:
                 task.mark_escalated(duration, cost, reason="ai_escalation")
                 kpi.total_escalations += 1
                 events.append(
@@ -272,7 +365,7 @@ class SimulationRunner:
                 )
 
             record_task_totals(kpi, node.node_id, duration, cost)
-            if scheduler is not None:
+            if tracks_capacity:
                 events.append(
                     Event(EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id)
                 )
@@ -287,4 +380,13 @@ class SimulationRunner:
             current_node_id = choose_next_node(workflow, node.node_id, self._rng)
 
 
-__all__ = ["SimulationRunner", "SimulationResult", "ENGINES", "resolve_arrival_times"]
+__all__ = [
+    "SimulationRunner",
+    "SimulationResult",
+    "ENGINES",
+    "resolve_arrival_times",
+    "ScheduledExecution",
+    "schedule_task_execution",
+    "record_actor_utilization",
+    "record_pool_utilization",
+]
