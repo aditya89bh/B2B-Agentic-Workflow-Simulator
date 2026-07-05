@@ -12,20 +12,28 @@ definition, not in the engine.
 ## Layers
 
 ```
-primitives/    Data-only building blocks (Node, Edge, Actor, Task, Event, DurationModel)
-workflow.py    Graph structure + structural validation
-workflow_io.py JSON (de)serialization + stdlib schema validation for Workflow
-capacity.py    ActorScheduler: per-actor queueing and daily capacity limits
-kpi.py         Aggregation of simulation output into business metrics
-simulation.py  Execution engine (stateless aside from its seeded RNG)
-redesign.py    Before/after comparison of two KPIResult objects, plus ROI
-portfolio.py   Aggregation and ranking across several RedesignDiff results
-sensitivity.py Parameter sweeps over a before/after pair, break-even detection
-report.py      Plain-text rendering of a RedesignDiff or WorkflowPortfolio
-html_report.py Static HTML rendering of a RedesignDiff or WorkflowPortfolio
-export.py      JSON/CSV serialization of events, KPIs, and diffs
-examples/      Concrete, business-realistic Workflow instances + sample JSON
-cli.py         Thin argument-parsing layer over the above
+primitives/           Data-only building blocks (Node, Edge, Actor, Task, Event,
+                      DurationModel, Worker, Shift)
+workflow.py           Graph structure + structural validation
+workflow_io.py        JSON (de)serialization + stdlib schema validation for Workflow
+capacity.py           ActorScheduler: per-actor queueing and daily capacity limits
+arrivals.py           ArrivalModel: fixed/uniform/batched/business-hour/peak-hour patterns
+pool.py               ActorPool + PoolScheduler: team capacity, least-loaded routing
+queueing.py           Queue depth, growth/collapse, idle time, throughput analysis
+discrete_event.py     DiscreteEventEngine: global priority-queue simulation
+kpi.py                Aggregation of simulation output into business metrics
+simulation.py         Execution engine (simple engine; dispatches to DiscreteEventEngine)
+redesign.py           Before/after comparison of two KPIResult objects, plus ROI
+portfolio.py          Aggregation and ranking across several RedesignDiff results
+sensitivity.py        Parameter sweeps over a before/after pair, break-even detection
+sensitivity_grid.py   Two-parameter sensitivity grids, ROI/region classification
+monte_carlo.py        Repeated seeded runs, percentile statistics, variability reports
+capacity_planning.py  Staffing recommendations and hiring simulation
+report.py             Plain-text rendering of a RedesignDiff or WorkflowPortfolio
+html_report.py        Static HTML rendering of all report types
+export.py             JSON/CSV serialization of events, KPIs, and diffs
+examples/             Concrete, business-realistic Workflow instances + sample JSON
+cli.py                Thin argument-parsing layer over the above
 ```
 
 Each layer only depends on the ones listed above it. `primitives` has no
@@ -33,19 +41,33 @@ dependencies within the package. `workflow.py` and `capacity.py` depend
 only on `primitives`. `workflow_io.py` depends on `primitives` and
 `workflow.py` to build/serialize a `Workflow`, but not on `simulation.py`
 -- persistence and execution are independent concerns. `kpi.py` is
-standalone data. `simulation.py` depends on `primitives`, `workflow.py`,
-`capacity.py`, and `kpi.py`. `redesign.py` depends only on `kpi.py`, so a
-`RedesignDiff` can be built from any two `KPIResult` objects without
-touching the simulation engine at all -- useful for testing and for
-future integrations that produce KPIs some other way. `portfolio.py`
-depends only on `kpi.py` and `redesign.py`, following the same pattern:
-it aggregates already-computed `RedesignDiff` results rather than
-running simulations itself. `sensitivity.py` is the one exception that
-does depend on `simulation.py`, since a sweep has to actually re-run the
-simulation at each parameter value. `report.py` and `html_report.py`
-both depend on `redesign.py` and `portfolio.py`, and `export.py` depends
-on `redesign.py` (and `kpi.py`/`primitives`), keeping "how we compute
-results" fully separate from "how we present them."
+standalone data. `arrivals.py` depends only on the standard library.
+`pool.py` depends on `primitives` (specifically `Worker` and `Shift`)
+and mirrors `capacity.py`'s scheduling role for teams instead of single
+actors. `queueing.py` depends only on `simulation.py`'s `SimulationResult`
+shape, replaying its event log rather than hooking into execution
+itself. `discrete_event.py` depends on `primitives`, `workflow.py`,
+`capacity.py`, `pool.py`, and shares its scheduling helpers with
+`simulation.py` (which imports from it, not the reverse, keeping the
+simple engine as the default with no import-time cost for the
+discrete-event path). `simulation.py` depends on `primitives`,
+`workflow.py`, `capacity.py`, `pool.py`, `arrivals.py`, and `kpi.py`.
+`redesign.py` depends only on `kpi.py`, so a `RedesignDiff` can be built
+from any two `KPIResult` objects without touching the simulation engine
+at all -- useful for testing and for future integrations that produce
+KPIs some other way. `portfolio.py` depends only on `kpi.py` and
+`redesign.py`, following the same pattern: it aggregates
+already-computed `RedesignDiff` results rather than running simulations
+itself. `sensitivity.py`, `sensitivity_grid.py`, and `monte_carlo.py` all
+depend on `simulation.py` and `redesign.py`, since each has to actually
+re-run the simulation (once per swept value, once per grid cell, or
+once per seed, respectively) to observe how outcomes change.
+`capacity_planning.py` depends on `kpi.py`, `pool.py`, `queueing.py`,
+and `simulation.py`. `report.py` and `html_report.py` depend on
+`redesign.py`, `portfolio.py`, `monte_carlo.py`, `sensitivity_grid.py`,
+and `capacity_planning.py`, and `export.py` depends on `redesign.py`
+(and `kpi.py`/`primitives`), keeping "how we compute results" fully
+separate from "how we present them."
 
 ## Node and Edge: the graph
 
@@ -79,21 +101,24 @@ behave in practice:
 
 ## Simulation model
 
-`SimulationRunner.run(workflow, num_cases, arrival_interval_minutes=None)`
+`SimulationRunner.run(workflow, num_cases, arrival_interval_minutes=None, arrival_model=None, engine="simple")`
 simulates `num_cases` cases. Each case starts at `workflow.entry_node_id`
 and repeats the following until it reaches a terminal node or fails:
 
-1. Resolve the node's assigned actor.
+1. Resolve the node's assigned actor (a single `HumanActor`/`AIAgentActor`,
+   or an `ActorPool`).
 2. Sample a duration from the node's `DurationModel` (fixed by default)
-   and scale it by `actor.speed_multiplier`; compute cost via
-   `actor.cost_for_duration(duration)`.
-3. If `arrival_interval_minutes` was given, ask the run's `ActorScheduler`
-   when this actor can actually start the task -- this is where queueing
-   and daily capacity limits are enforced (see `docs/capacity_modeling.md`).
-   Otherwise the actor is always immediately available, matching Phase 1
+   and scale it by the actor's (or, for a pool, the routed worker's)
+   `speed_multiplier`; compute cost accordingly.
+3. If `arrival_interval_minutes` or `arrival_model` was given, ask the
+   run's `ActorScheduler` (single actor) or `PoolScheduler` (pool) when
+   this resource can actually start the task -- this is where queueing,
+   daily capacity limits, and shift schedules are enforced (see
+   `docs/capacity_modeling.md` and `docs/team_capacity.md`). Otherwise
+   the resource is always immediately available, matching Phase 1
    behavior exactly.
-4. Roll against `actor.error_rate` to decide whether the task fails; a
-   failure ends the case immediately as a `CASE_FAILED` event.
+4. Roll against the resource's `error_rate` to decide whether the task
+   fails; a failure ends the case immediately as a `CASE_FAILED` event.
 5. If the actor is an `AIAgentActor`, roll against `escalation_rate` to
    decide whether the task is marked `ESCALATED` (still counted as
    progressing the case, but flagged distinctly for reporting).
@@ -105,6 +130,20 @@ All of this is driven by a single `random.Random` instance seeded at
 `SimulationRunner` construction, so a given seed reproduces the exact
 same sequence of outcomes — essential for treating "before" and "after"
 comparisons as controlled experiments rather than noisy one-off samples.
+
+`engine="simple"` (the default) processes cases one at a time in
+arrival order, as described above. `engine="discrete"` dispatches to
+`DiscreteEventEngine`, which processes the same per-case logic but
+through a single global, time-ordered priority queue of arrival and
+task-completion events, giving a more general model of contention
+across many simultaneously in-flight cases. Both engines share the same
+scheduling helpers and produce the same `SimulationResult` shape; see
+`docs/discrete_event_engine.md` for when the two can diverge and why.
+`arrival_model` (an `ArrivalModel` from `arrivals.py`) is an alternative
+to `arrival_interval_minutes` for generating non-uniform arrival
+patterns -- uniform-random gaps, batched arrivals, or business-hour/
+peak-hour spacing -- while remaining fully deterministic for a given
+seed.
 
 ## KPI aggregation
 
@@ -186,19 +225,63 @@ page. `report.py` and `html_report.py` share the same value-formatting
 and risk/recommendation helper functions so the two presentations never
 disagree about what a number means.
 
-## What Phase 3 deliberately leaves out
+## Team pools, queueing analysis, and workforce scheduling
 
-- True concurrent, event-driven scheduling across cases (the capacity
-  model processes cases in arrival order rather than running a full
-  discrete-event simulation with a global event heap).
+`pool.py` extends single-actor capacity to `ActorPool`: a team of
+`Worker`s, each with independent cost, speed, reliability, shift
+schedule, and availability. `PoolScheduler` routes each task to
+whichever available worker can start soonest ("least-loaded" routing),
+respecting shift days/hours and any overtime capacity, and tracks
+utilization at both the pool and individual-worker level. `queueing.py`
+replays a run's event log to reconstruct queue depth over time, actor
+idle minutes, and throughput, and classifies each actor's queue as
+growing, collapsing, or stable using a time-weighted comparison of the
+first and second halves of its observed timeline. See
+`docs/team_capacity.md`.
+
+## Monte Carlo analysis
+
+A single seeded run is one plausible outcome, not the range of outcomes
+real random variation produces. `monte_carlo.py` re-runs a workflow (or
+a before/after pair) once per seed and summarizes each metric's
+distribution -- mean, min, max, median, P10, P90, and standard
+deviation -- via `run_monte_carlo()`/`run_monte_carlo_comparison()`,
+with plain-text and HTML executive reports that translate the
+statistics into a plain-language read on how much confidence to place
+in a point estimate. See `docs/monte_carlo.md`.
+
+## Multi-parameter sensitivity
+
+`sensitivity_grid.py` extends `sensitivity.py`'s single-parameter sweep
+to a two-dimensional grid, re-simulating a before/after pair once per
+`(x, y)` combination of two swept assumptions. Every grid cell is
+classified as a safe, negative-ROI, or operationally unstable operating
+region, surfacing interactions between assumptions (e.g. AI cost and
+error rate moving together) that two independent single-parameter
+sweeps cannot capture. See `docs/advanced_sensitivity.md`.
+
+## Capacity planning
+
+`capacity_planning.py` turns simulated utilization into a staffing
+decision: `analyze_capacity()` classifies each actor or pool as
+overloaded, underutilized, or balanced against a target utilization and
+recommends a headcount change, while `simulate_hiring()` actually
+re-runs the simulation with proposed additional workers to verify a
+specific hire relieves the queueing pressure it is meant to relieve,
+rather than trusting a headcount formula in isolation. See
+`docs/capacity_planning.md`.
+
+## What this codebase deliberately leaves out
+
 - A web UI or a GUI workflow authoring tool (JSON persistence supports
   hand-editing or future tooling, but no such tooling is included here).
 - Multi-currency or time-zone-aware cost/scheduling models.
-- Multi-parameter sensitivity sweeps (each sweep varies exactly one
-  assumption at a time; joint sensitivity across two or more parameters
-  would require a grid search, deliberately left out to avoid
-  over-engineering a feature with no example driving its design yet).
+- Cross-training or skill differences within a pool beyond
+  `speed_multiplier`/`error_rate`, and workers moving between pools
+  mid-simulation.
+- Optimization across multiple simultaneous staffing decisions (each
+  sensitivity grid or hiring simulation evaluates one scenario at a
+  time; comparing several means running the function once per scenario).
 
-These remain natural extensions for later phases once the redesign,
-capacity, portfolio, and sensitivity models have proven themselves on
-more examples.
+These remain natural extensions for later phases once the current
+models have proven themselves on more examples.
