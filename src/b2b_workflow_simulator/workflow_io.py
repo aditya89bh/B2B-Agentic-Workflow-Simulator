@@ -129,6 +129,12 @@ def _validate_node_dict(node: Any, context: str) -> None:
         )
     if "is_terminal" in node:
         _require(isinstance(node["is_terminal"], bool), f"{context}.is_terminal must be a boolean")
+    if "additional_actor_ids" in node:
+        _require(
+            isinstance(node["additional_actor_ids"], list)
+            and all(isinstance(item, str) and item for item in node["additional_actor_ids"]),
+            f"{context}.additional_actor_ids must be a list of non-empty strings",
+        )
     if "metadata" in node:
         _require(isinstance(node["metadata"], dict), f"{context}.metadata must be an object")
     if "duration_model" in node:
@@ -235,6 +241,7 @@ def _node_from_dict(data: dict) -> Node:
         base_duration_minutes=data.get("base_duration_minutes", 0.0),
         duration_model=duration_model,
         is_terminal=data.get("is_terminal", False),
+        additional_actor_ids=tuple(data.get("additional_actor_ids", [])),
         metadata=data.get("metadata", {}),
     )
 
@@ -281,6 +288,7 @@ def workflow_to_dict(workflow: Workflow) -> dict:
                     "mode": node.duration_model.mode,
                 },
                 "is_terminal": node.is_terminal,
+                "additional_actor_ids": list(node.additional_actor_ids),
                 "metadata": node.metadata,
             }
         )
