@@ -95,6 +95,36 @@ recommendations -- overloaded, underutilized, or balanced against a
 target -- and lets you simulate the effect of a specific hire before
 committing to it (see `docs/capacity_planning.md`).
 
+Beyond execution, the simulator reasons about governance and business
+risk directly. A **`Node`** can require more than one actor at once (e.g.
+Manager + Legal, or an AI agent plus a human reviewer), with the resulting
+coordination delay tracked on `KPIResult` (see `docs/team_capacity.md`). A
+**business policy engine** and a **compliance engine** check a workflow's
+structure against attachable governance rules -- approval gates, routing
+and escalation constraints, retry safety, business hours, mandatory human
+review, separation of duties, GDPR-style consent gates, financial approval
+chains, mandatory documentation, and record retention -- reporting
+violations, a compliance score, and audit findings (see
+`docs/policy_engine.md`, `docs/compliance.md`). An **SLA engine** checks
+completion, response, and escalation deadlines against a simulation's
+actual event log, tracking attainment, breaches, and estimated financial
+penalties (see `docs/sla_modeling.md`). An **organizational risk engine**
+scores a workflow across six categories -- operational, compliance, AI
+failure, staffing, process complexity, and single point of failure -- with
+an explainable list of risk factors behind every score (see
+`docs/risk_engine.md`). A **recommendation engine** turns all of the above
+into a prioritized, reasoned list of actionable suggestions -- automate
+this task, keep human review, adjust staffing, merge or split activities,
+redesign an escalation path -- each with affected KPIs, an expected
+benefit, and a confidence level (see `docs/recommendation_engine.md`). An
+**AI adoption assessment** scores automation readiness, AI maturity, human
+dependency, governance, explainability, and rollout complexity into a
+pilot/phased-rollout/full-deployment recommendation, and an **executive
+assessment report** combines every one of these analyses -- KPI summary,
+ROI, SLA performance, compliance, policy violations, organizational risk,
+recommendations, and AI adoption -- into a single plain-text or HTML
+document (see `docs/ai_adoption.md`).
+
 ## Bundled examples
 
 ### Sales lead qualification
@@ -190,6 +220,23 @@ b2b-simulator sensitivity-grid-example invoice-processing \
 # Capacity planning: staffing recommendations and raw utilization figures.
 b2b-simulator capacity-analysis invoice-processing --arrival-interval 10
 b2b-simulator team-utilization invoice-processing --arrival-interval 10
+
+# Governance: policy and compliance checks against workflow structure.
+b2b-simulator policy-analysis invoice-processing --variant after
+b2b-simulator compliance-analysis invoice-processing --variant after --html-output compliance.html
+
+# Organizational risk: category scores and explainable risk factors.
+b2b-simulator risk-analysis invoice-processing --variant after --cases 300
+
+# AI adoption readiness: pilot / phased rollout / full deployment recommendation.
+b2b-simulator readiness-analysis invoice-processing --variant after --cases 300
+
+# Actionable, reasoned redesign recommendations.
+b2b-simulator recommend-redesign invoice-processing --variant after --cases 300
+
+# Executive assessment report: KPI, ROI, SLA, compliance, policy, risk,
+# recommendations, and AI adoption combined into one report.
+b2b-simulator executive-report invoice-processing --cases 300 --implementation-cost 8000 --html-output executive.html
 ```
 
 Example `run-example` output:
@@ -245,15 +292,26 @@ src/b2b_workflow_simulator/
     sensitivity_grid.py                  Two-parameter sensitivity grids and region classification
     monte_carlo.py                         Repeated seeded runs and percentile statistics
     capacity_planning.py                     Staffing recommendations and hiring simulation
+    multi_resource.py                          Synchronized scheduling for multi-actor tasks
+    policy.py                                    Business policy engine and violation tracking
+    compliance.py                                  Compliance requirements and audit findings
+    sla.py                                           SLA deadline tracking and breach analysis
+    risk.py                                            Organizational risk scoring engine
+    recommendation.py                                    Actionable, reasoned recommendations
+    ai_adoption.py                                         AI adoption readiness assessment
+    executive_report.py                                      Combined executive assessment
     report.py                            Plain-text report generators for every analysis type
     html_report.py                         Static HTML report renderer
     export.py                                JSON/CSV export for events, KPIs, and comparisons
-    examples/                                   Bundled example workflows + sample JSON definitions
+    examples/                                   Bundled example workflows + sample JSON
+                                                 definitions + governance.py (policy/compliance/SLA)
     cli.py                                        Command-line entry point
 tests/                    Unit tests for every module above
 docs/                     Architecture, capacity modeling, redesign/portfolio/sensitivity
                           analysis, JSON workflows, discrete-event engine, team capacity,
-                          Monte Carlo, advanced sensitivity, and capacity planning
+                          Monte Carlo, advanced sensitivity, capacity planning, policy
+                          engine, compliance, SLA modeling, risk engine, recommendation
+                          engine, and AI adoption
 ```
 
 ## Status
@@ -275,7 +333,15 @@ batched, business-hour, peak-hour); team-based capacity via
 Monte Carlo analysis across many seeds with percentile statistics;
 two-parameter sensitivity grids with safe/negative/unstable region
 classification; and a capacity planning engine for staffing
-recommendations and hiring simulations.
+recommendations and hiring simulations. Phase 5 transforms the simulator
+from a workflow simulator into a decision-support platform: multi-resource
+tasks requiring several actors at once; a business policy engine and a
+compliance engine for governance rules and regulatory/audit requirements;
+an SLA engine tracking deadline attainment, breaches, and penalties; an
+organizational risk engine with explainable category scores; a
+recommendation engine generating actionable, reasoned suggestions; an AI
+adoption assessment scoring rollout readiness; and an executive assessment
+report combining every analysis into one document.
 
 ## License
 
