@@ -11,6 +11,17 @@ from __future__ import annotations
 
 import html
 
+from b2b_workflow_simulator.monte_carlo import (
+    COMPARISON_METRICS,
+    KPI_METRICS,
+    METRIC_LABELS,
+    MetricStats,
+    MonteCarloComparisonResult,
+    MonteCarloResult,
+    build_comparison_variability_summary,
+    build_variability_summary,
+    format_stat_value,
+)
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.redesign import MetricDelta, RedesignDiff
 from b2b_workflow_simulator.report import (
@@ -239,4 +250,74 @@ def render_portfolio_html(portfolio: WorkflowPortfolio, rank_by: str = "total_co
     return _page(f"{portfolio.name} - Portfolio Report", body)
 
 
-__all__ = ["render_diff_html", "render_portfolio_html"]
+def _stats_table(metric_stats: dict[str, MetricStats], metrics: list[str]) -> str:
+    rows = []
+    for metric in metrics:
+        stats = metric_stats.get(metric)
+        label = _escape(METRIC_LABELS.get(metric, metric))
+        if stats is None or stats.sample_count == 0:
+            rows.append(f"<tr><td>{label}</td><td colspan='6'>n/a</td></tr>")
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{label}</td>"
+            f"<td>{_escape(format_stat_value(metric, stats.mean))}</td>"
+            f"<td>{_escape(format_stat_value(metric, stats.minimum))}</td>"
+            f"<td>{_escape(format_stat_value(metric, stats.maximum))}</td>"
+            f"<td>{_escape(format_stat_value(metric, stats.median))}</td>"
+            f"<td>{_escape(format_stat_value(metric, stats.p10))}</td>"
+            f"<td>{_escape(format_stat_value(metric, stats.p90))}</td>"
+            "</tr>"
+        )
+    return (
+        "<table>\n"
+        "  <tr><th>Metric</th><th>Mean</th><th>Min</th><th>Max</th>"
+        "<th>Median</th><th>P10</th><th>P90</th></tr>\n"
+        + "\n".join(rows)
+        + "\n</table>"
+    )
+
+
+def render_monte_carlo_html(result: MonteCarloResult) -> str:
+    """Render a `MonteCarloResult` as a standalone HTML report."""
+    summary_items = "".join(
+        f"<li>{_escape(line)}</li>" for line in build_variability_summary(result)
+    )
+    body = f"""
+  <h1>Monte Carlo Simulation Analysis</h1>
+  <p class="subtitle">{_escape(result.workflow_name)} &mdash; {result.num_runs} simulated runs</p>
+
+  <h2>Executive Summary</h2>
+  <ul>{summary_items}</ul>
+
+  <h2>Metric Distribution</h2>
+  {_stats_table(result.metric_stats, list(KPI_METRICS))}
+"""
+    return _page(f"{result.workflow_name} - Monte Carlo Report", body)
+
+
+def render_monte_carlo_comparison_html(result: MonteCarloComparisonResult) -> str:
+    """Render a `MonteCarloComparisonResult` as a standalone HTML report."""
+    summary_items = "".join(
+        f"<li>{_escape(line)}</li>" for line in build_comparison_variability_summary(result)
+    )
+    body = f"""
+  <h1>Monte Carlo Redesign Comparison</h1>
+  <p class="subtitle">{_escape(result.before_name)} vs {_escape(result.after_name)}
+  &mdash; {result.num_runs} simulated runs</p>
+
+  <h2>Executive Summary</h2>
+  <ul>{summary_items}</ul>
+
+  <h2>Metric Distribution</h2>
+  {_stats_table(result.metric_stats, list(COMPARISON_METRICS))}
+"""
+    return _page(f"{result.before_name} vs {result.after_name} - Monte Carlo Comparison", body)
+
+
+__all__ = [
+    "render_diff_html",
+    "render_portfolio_html",
+    "render_monte_carlo_html",
+    "render_monte_carlo_comparison_html",
+]
