@@ -9,6 +9,7 @@ from b2b_workflow_simulator.policy import (
     RoutingPolicy,
     SeparationOfDutiesPolicy,
     evaluate_policies,
+    generate_policy_report,
 )
 from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
@@ -303,6 +304,46 @@ def test_evaluate_policies_with_empty_list_is_always_compliant():
 
     assert evaluation.is_compliant
     assert evaluation.policies_checked == 0
+
+
+def test_generate_policy_report_includes_workflow_name_and_summary():
+    workflow = build_invoice_workflow(with_approval=False)
+    policy = ApprovalPolicy(
+        name="controller-approval",
+        target_node_id="payment",
+        required_before_node_ids=("approval",),
+    )
+    evaluation = evaluate_policies(workflow, [policy])
+
+    report = generate_policy_report(evaluation)
+
+    assert "POLICY COMPLIANCE ANALYSIS" in report
+    assert "Invoice" in report
+    assert "controller-approval" in report
+    assert "1 violation(s) found" in report
+
+
+def test_generate_policy_report_for_fully_compliant_workflow():
+    workflow = build_invoice_workflow(with_approval=True)
+    policy = ApprovalPolicy(
+        name="controller-approval",
+        target_node_id="payment",
+        required_before_node_ids=("approval",),
+    )
+    evaluation = evaluate_policies(workflow, [policy])
+
+    report = generate_policy_report(evaluation)
+
+    assert "satisfies every attached policy" in report
+
+
+def test_generate_policy_report_for_no_policies():
+    workflow = build_invoice_workflow(with_approval=True)
+    evaluation = evaluate_policies(workflow, [])
+
+    report = generate_policy_report(evaluation)
+
+    assert "No policies were attached" in report
 
 
 @pytest.mark.parametrize(
