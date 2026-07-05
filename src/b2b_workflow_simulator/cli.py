@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from b2b_workflow_simulator.examples import invoice_processing, sales_lead_qualification
+from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.report import generate_report
 from b2b_workflow_simulator.simulation import SimulationRunner
+
+EXPORT_FORMATS = ("json", "csv")
 
 EXAMPLES = {
     "sales-lead-qualification": (
@@ -119,6 +123,44 @@ def compare_example(
     return 0
 
 
+def export_example(
+    example_name: str,
+    num_cases: int,
+    seed: int | None,
+    export_format: str,
+    output_dir: str,
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+) -> int:
+    """Run both variants of a bundled example and export results to disk."""
+    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes)
+    if outcome is None:
+        return 1
+    _before_workflow, _after_workflow, before_result, after_result = outcome
+
+    diff = compare_workflows(before_result.kpi, after_result.kpi, implementation_cost)
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+
+    if export_format == "json":
+        files = {
+            f"{example_name}-before-events.json": events_to_json(before_result.events),
+            f"{example_name}-after-events.json": events_to_json(after_result.events),
+            f"{example_name}-before-kpi.json": kpi_to_json(before_result.kpi),
+            f"{example_name}-after-kpi.json": kpi_to_json(after_result.kpi),
+            f"{example_name}-comparison.json": diff_to_json(diff),
+        }
+    else:
+        files = {f"{example_name}-comparison.csv": diff_to_csv(diff)}
+
+    print(f"Exported {len(files)} file(s) to {destination}/:")
+    for filename, content in files.items():
+        file_path = destination / filename
+        file_path.write_text(content)
+        print(f"  - {file_path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="b2b-simulator",
@@ -181,6 +223,51 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minutes between case arrivals; enables capacity-aware queueing.",
     )
 
+    export_parser = subparsers.add_parser(
+        "export-example",
+        help="Run a bundled example and export events, KPIs, and the comparison to disk.",
+    )
+    export_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    export_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per variant (default: 200).",
+    )
+    export_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    export_parser.add_argument(
+        "--format",
+        choices=EXPORT_FORMATS,
+        default="json",
+        help="Export format (default: json). csv exports the comparison only.",
+    )
+    export_parser.add_argument(
+        "--output-dir",
+        default="exports",
+        help="Directory to write exported files into (default: ./exports).",
+    )
+    export_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time cost of implementing the redesign, for payback analysis.",
+    )
+    export_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+
     return parser
 
 
@@ -194,6 +281,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "compare-example":
         return compare_example(
             args.name, args.cases, args.seed, args.implementation_cost, args.arrival_interval
+        )
+
+    if args.command == "export-example":
+        return export_example(
+            args.name,
+            args.cases,
+            args.seed,
+            args.format,
+            args.output_dir,
+            args.implementation_cost,
+            args.arrival_interval,
         )
 
     parser.print_help()
