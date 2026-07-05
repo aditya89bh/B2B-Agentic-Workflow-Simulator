@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 
+from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.capacity import ActorScheduler
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
@@ -13,6 +14,27 @@ from b2b_workflow_simulator.primitives.task import Task
 from b2b_workflow_simulator.workflow import Workflow
 
 ENGINES = ("simple", "discrete")
+
+
+def resolve_arrival_times(
+    num_cases: int,
+    arrival_interval_minutes: float | None,
+    arrival_model: ArrivalModel | None,
+    rng: random.Random,
+) -> list[float] | None:
+    """Return one arrival timestamp per case, or `None` for unconstrained arrivals.
+
+    At most one of `arrival_interval_minutes` or `arrival_model` may be
+    given. Supplying both raises, rather than silently picking one, since
+    that combination almost always indicates a caller mistake.
+    """
+    if arrival_interval_minutes is not None and arrival_model is not None:
+        raise ValueError("supply at most one of arrival_interval_minutes or arrival_model")
+    if arrival_model is not None:
+        return arrival_model.generate(num_cases, rng)
+    if arrival_interval_minutes is not None:
+        return [case_index * arrival_interval_minutes for case_index in range(num_cases)]
+    return None
 
 
 @dataclass
@@ -98,6 +120,7 @@ class SimulationRunner:
         num_cases: int,
         arrival_interval_minutes: float | None = None,
         engine: str = "simple",
+        arrival_model: ArrivalModel | None = None,
     ) -> SimulationResult:
         """Simulate `num_cases` cases flowing through `workflow`.
 
@@ -106,10 +129,14 @@ class SimulationRunner:
             num_cases: How many independent cases to simulate.
             arrival_interval_minutes: If provided, cases arrive this many
                 minutes apart and compete for actor capacity, producing
-                queueing and wait time. If omitted, actors are always
-                immediately available (no capacity constraints).
+                queueing and wait time. If omitted (and `arrival_model` is
+                also omitted), actors are always immediately available
+                (no capacity constraints).
             engine: Either "simple" (default, backward compatible) or
                 "discrete" to use the chronological event-queue engine.
+            arrival_model: An `ArrivalModel` describing a richer arrival
+                pattern (uniform, batched, business-hour, or peak-hour).
+                Mutually exclusive with `arrival_interval_minutes`.
 
         Returns:
             A `SimulationResult` containing the full event log and the
@@ -127,18 +154,22 @@ class SimulationRunner:
             from b2b_workflow_simulator.discrete_event import DiscreteEventEngine
 
             return DiscreteEventEngine(seed=self._seed).run(
-                workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+                workflow,
+                num_cases,
+                arrival_interval_minutes=arrival_interval_minutes,
+                arrival_model=arrival_model,
             )
 
+        arrival_times = resolve_arrival_times(
+            num_cases, arrival_interval_minutes, arrival_model, self._rng
+        )
         events: list[Event] = []
         kpi = KPIResult(workflow_name=workflow.name)
-        scheduler = ActorScheduler() if arrival_interval_minutes is not None else None
+        scheduler = ActorScheduler() if arrival_times is not None else None
 
         for case_index in range(num_cases):
             case_id = f"case-{case_index + 1}"
-            arrival_time = (
-                case_index * arrival_interval_minutes if arrival_interval_minutes else 0.0
-            )
+            arrival_time = arrival_times[case_index] if arrival_times is not None else 0.0
             self._run_case(workflow, case_id, arrival_time, events, kpi, scheduler)
 
         kpi.total_cases = num_cases
@@ -256,4 +287,4 @@ class SimulationRunner:
             current_node_id = choose_next_node(workflow, node.node_id, self._rng)
 
 
-__all__ = ["SimulationRunner", "SimulationResult", "ENGINES"]
+__all__ = ["SimulationRunner", "SimulationResult", "ENGINES", "resolve_arrival_times"]

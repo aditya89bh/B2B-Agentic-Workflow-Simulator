@@ -37,6 +37,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
+from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.capacity import ActorScheduler
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
@@ -46,6 +47,7 @@ from b2b_workflow_simulator.simulation import (
     choose_next_node,
     record_actor_utilization,
     record_task_totals,
+    resolve_arrival_times,
 )
 from b2b_workflow_simulator.workflow import Workflow
 
@@ -101,6 +103,7 @@ class DiscreteEventEngine:
         workflow: Workflow,
         num_cases: int,
         arrival_interval_minutes: float | None = None,
+        arrival_model: ArrivalModel | None = None,
     ) -> SimulationResult:
         """Simulate `num_cases` cases through `workflow` via the event queue.
 
@@ -111,17 +114,18 @@ class DiscreteEventEngine:
         if arrival_interval_minutes is not None and arrival_interval_minutes < 0:
             raise ValueError("arrival_interval_minutes cannot be negative")
         workflow.validate()
+        arrival_times = resolve_arrival_times(
+            num_cases, arrival_interval_minutes, arrival_model, self._rng
+        )
 
         events: list[Event] = []
         kpi = KPIResult(workflow_name=workflow.name)
-        scheduler = ActorScheduler() if arrival_interval_minutes is not None else None
+        scheduler = ActorScheduler() if arrival_times is not None else None
         queue: list[_QueuedEvent] = []
 
         for case_index in range(num_cases):
             case_id = f"case-{case_index + 1}"
-            arrival_time = (
-                case_index * arrival_interval_minutes if arrival_interval_minutes else 0.0
-            )
+            arrival_time = arrival_times[case_index] if arrival_times is not None else 0.0
             self._push(queue, arrival_time, _ARRIVAL, {"case_id": case_id})
 
         while queue:
