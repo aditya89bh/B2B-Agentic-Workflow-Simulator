@@ -6,6 +6,7 @@ from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.sensitivity_grid import (
     GridPoint,
     SensitivityGridResult,
+    generate_sensitivity_grid_report,
     run_sensitivity_grid,
 )
 from b2b_workflow_simulator.workflow import Workflow
@@ -249,3 +250,36 @@ class TestRegionClassification:
         assert result.points == []
         assert result.x_values == []
         assert result.y_values == []
+
+
+class TestGenerateSensitivityGridReport:
+    def test_includes_parameter_names_and_roi_matrix(self):
+        result = run_sensitivity_grid(
+            build_before,
+            build_after,
+            "ai_error_rate",
+            [0.05, 0.1],
+            "ai_cost_per_execution",
+            [0.5, 1.0],
+            num_cases=20,
+            seed=1,
+        )
+        report = generate_sensitivity_grid_report(result)
+        assert "ai_error_rate" in report
+        assert "ai_cost_per_execution" in report
+        assert "ROI MATRIX" in report
+        assert "OPERATING REGIONS" in report
+
+    def test_notes_flag_unstable_combinations(self):
+        result = run_sensitivity_grid(
+            build_before,
+            build_after,
+            "ai_error_rate",
+            [0.01, 0.95],
+            "ai_cost_per_execution",
+            [0.5],
+            num_cases=30,
+            seed=1,
+        )
+        report = generate_sensitivity_grid_report(result)
+        assert "NOTES" in report
