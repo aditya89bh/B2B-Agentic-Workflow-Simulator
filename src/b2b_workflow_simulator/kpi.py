@@ -41,6 +41,17 @@ class KPIResult:
             an `ActorPool` rather than a single actor.
         worker_utilization: Per-worker utilization within each pool,
             keyed first by pool actor_id and then by worker_id.
+        total_coordination_delay_minutes: Sum, across all cases, of the
+            extra wait multi-resource tasks (e.g. "Manager + Legal")
+            incurred synchronizing every required participant before
+            starting, beyond what the fastest-available participant would
+            have waited alone. Zero for workflows with no multi-resource
+            nodes.
+        node_coordination_delay_minutes: Coordination delay broken down by
+            node_id, for identifying which multi-resource steps are the
+            most expensive to synchronize.
+        multi_resource_task_count: Number of task executions that required
+            more than one actor.
     """
 
     workflow_name: str
@@ -59,6 +70,9 @@ class KPIResult:
     actor_utilization: dict[str, float] = field(default_factory=dict)
     pool_utilization: dict[str, float] = field(default_factory=dict)
     worker_utilization: dict[str, dict[str, float]] = field(default_factory=dict)
+    total_coordination_delay_minutes: float = 0.0
+    node_coordination_delay_minutes: dict[str, float] = field(default_factory=dict)
+    multi_resource_task_count: int = 0
 
     @property
     def completion_rate(self) -> float:
