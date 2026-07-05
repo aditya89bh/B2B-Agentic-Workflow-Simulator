@@ -6,14 +6,32 @@ import argparse
 import sys
 from pathlib import Path
 
+from b2b_workflow_simulator.capacity_planning import (
+    DEFAULT_OVERLOAD_THRESHOLD,
+    DEFAULT_TARGET_UTILIZATION,
+    DEFAULT_UNDERUTILIZATION_THRESHOLD,
+    analyze_capacity,
+    generate_capacity_report,
+)
 from b2b_workflow_simulator.examples import (
     customer_support_ticket_resolution,
     invoice_processing,
     sales_lead_qualification,
 )
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
-from b2b_workflow_simulator.html_report import render_diff_html, render_portfolio_html
+from b2b_workflow_simulator.html_report import (
+    render_capacity_html,
+    render_diff_html,
+    render_monte_carlo_comparison_html,
+    render_portfolio_html,
+    render_sensitivity_grid_html,
+)
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.monte_carlo import (
+    generate_monte_carlo_comparison_report,
+    run_monte_carlo_comparison,
+)
+from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.report import generate_portfolio_report, generate_report
@@ -21,6 +39,10 @@ from b2b_workflow_simulator.sensitivity import (
     PARAMETERS,
     format_sensitivity_table,
     run_sensitivity_sweep,
+)
+from b2b_workflow_simulator.sensitivity_grid import (
+    generate_sensitivity_grid_report,
+    run_sensitivity_grid,
 )
 from b2b_workflow_simulator.simulation import ENGINES, SimulationRunner
 from b2b_workflow_simulator.workflow_io import load_workflow, save_workflow
@@ -280,6 +302,218 @@ def sensitivity_example(
     print(f"Example: {example_name}")
     print()
     print(format_sensitivity_table(result))
+    return 0
+
+
+def _parse_int_list(raw: str) -> list[int]:
+    try:
+        return [int(part) for part in raw.split(",")]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected a comma-separated list of integers, got {raw!r}"
+        ) from exc
+
+
+def monte_carlo_example(
+    example_name: str,
+    num_cases: int,
+    seeds: list[int],
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+    engine: str,
+    html_output: str | None,
+) -> int:
+    """Run a Monte Carlo comparison for a bundled example across many seeds."""
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return 1
+
+    build_before, build_after = EXAMPLES[example_name]
+    result = run_monte_carlo_comparison(
+        build_before,
+        build_after,
+        num_cases,
+        seeds,
+        arrival_interval_minutes=arrival_interval_minutes,
+        implementation_cost=implementation_cost,
+        engine=engine,
+    )
+    print(f"Example: {example_name}")
+    print(f"Seeds: {len(seeds)}")
+    print()
+    print(generate_monte_carlo_comparison_report(result))
+
+    if html_output:
+        Path(html_output).write_text(render_monte_carlo_comparison_html(result))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def monte_carlo_portfolio(
+    example_names: list[str],
+    num_cases: int,
+    seeds: list[int],
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+) -> int:
+    """Run a Monte Carlo comparison for several bundled examples and summarize each."""
+    unknown = [name for name in example_names if name not in EXAMPLES]
+    if unknown:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example(s): {', '.join(unknown)}. Available: {available}", file=sys.stderr)
+        return 1
+
+    print(f"Portfolio: {', '.join(example_names)}")
+    print(f"Cases per run: {num_cases}, Seeds: {len(seeds)}")
+    print()
+    rows = []
+    for name in example_names:
+        build_before, build_after = EXAMPLES[name]
+        result = run_monte_carlo_comparison(
+            build_before,
+            build_after,
+            num_cases,
+            seeds,
+            arrival_interval_minutes=arrival_interval_minutes,
+            implementation_cost=implementation_cost,
+        )
+        roi = result.metric_stats["roi_percentage"]
+        savings = result.metric_stats["total_cost_savings"]
+        roi_str = f"{roi.mean:+.1f}%" if roi.sample_count else "n/a"
+        rows.append((name, f"${savings.mean:,.2f}", roi_str))
+
+    label_width = max(len(row[0]) for row in rows)
+    col_width = max(max(len(row[1]), len(row[2])) for row in rows)
+    header = (
+        f"{'Workflow':<{label_width}}  {'Mean Savings':>{col_width}}  {'Mean ROI':>{col_width}}"
+    )
+    print(header)
+    print("-" * len(header))
+    for name, savings, roi in rows:
+        print(f"{name:<{label_width}}  {savings:>{col_width}}  {roi:>{col_width}}")
+    return 0
+
+
+def sensitivity_grid_example(
+    example_name: str,
+    x_parameter: str,
+    x_values: list[float],
+    y_parameter: str,
+    y_values: list[float],
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+    html_output: str | None,
+) -> int:
+    """Run a two-parameter sensitivity grid for a bundled example and print the ROI matrix."""
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return 1
+
+    build_before, build_after = EXAMPLES[example_name]
+    result = run_sensitivity_grid(
+        build_before,
+        build_after,
+        x_parameter,
+        x_values,
+        y_parameter,
+        y_values,
+        num_cases,
+        seed=seed,
+        implementation_cost=implementation_cost,
+    )
+    print(f"Example: {example_name}")
+    print()
+    print(generate_sensitivity_grid_report(result))
+
+    if html_output:
+        Path(html_output).write_text(render_sensitivity_grid_html(result))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def capacity_analysis(
+    example_name: str,
+    variant: str,
+    num_cases: int,
+    seed: int | None,
+    arrival_interval_minutes: float | None,
+    target_utilization: float,
+    overload_threshold: float,
+    underutilization_threshold: float,
+    html_output: str | None,
+) -> int:
+    """Run one variant of a bundled example and print a capacity/staffing report."""
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return 1
+
+    build_before, build_after = EXAMPLES[example_name]
+    workflow = build_before() if variant == "before" else build_after()
+    result = SimulationRunner(seed=seed).run(
+        workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+    )
+    pool_sizes = {
+        actor.actor_id: len(actor.workers)
+        for actor in workflow.actors.values()
+        if isinstance(actor, ActorPool)
+    }
+    plan = analyze_capacity(
+        result.kpi,
+        pool_sizes=pool_sizes,
+        target_utilization=target_utilization,
+        overload_threshold=overload_threshold,
+        underutilization_threshold=underutilization_threshold,
+    )
+    print(f"Example: {example_name} ({variant})")
+    print()
+    print(generate_capacity_report(plan))
+
+    if html_output:
+        Path(html_output).write_text(render_capacity_html(plan))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def team_utilization(
+    example_name: str,
+    variant: str,
+    num_cases: int,
+    seed: int | None,
+    arrival_interval_minutes: float | None,
+) -> int:
+    """Run one variant of a bundled example and print raw actor/pool/worker utilization."""
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return 1
+
+    build_before, build_after = EXAMPLES[example_name]
+    workflow = build_before() if variant == "before" else build_after()
+    result = SimulationRunner(seed=seed).run(
+        workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+    )
+    kpi = result.kpi
+
+    print(f"Example: {example_name} ({variant})")
+    print()
+    if not kpi.actor_utilization and not kpi.pool_utilization:
+        print("No capacity data available. Pass --arrival-interval to enable queueing.")
+        return 0
+
+    if kpi.actor_utilization:
+        print("Actor utilization:")
+        for actor_id, utilization in sorted(kpi.actor_utilization.items()):
+            print(f"  - {actor_id}: {utilization:.1%}")
+    if kpi.pool_utilization:
+        print("Pool utilization:")
+        for pool_id, utilization in sorted(kpi.pool_utilization.items()):
+            print(f"  - {pool_id}: {utilization:.1%}")
+            for worker_id, worker_util in sorted(kpi.worker_utilization.get(pool_id, {}).items()):
+                print(f"      - {worker_id}: {worker_util:.1%}")
     return 0
 
 
@@ -676,6 +910,236 @@ def build_parser() -> argparse.ArgumentParser:
         help="Random seed for reproducible results (default: 42).",
     )
 
+    monte_carlo_parser = subparsers.add_parser(
+        "monte-carlo-example",
+        help="Run a Monte Carlo comparison for a bundled example across many seeds.",
+    )
+    monte_carlo_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    monte_carlo_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per run (default: 200).",
+    )
+    monte_carlo_parser.add_argument(
+        "--seeds",
+        type=_parse_int_list,
+        default=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        help="Comma-separated list of seeds to run, e.g. '1,2,3' (default: 1..10).",
+    )
+    monte_carlo_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time cost of implementing the redesign, for payback analysis.",
+    )
+    monte_carlo_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    monte_carlo_parser.add_argument(
+        "--engine",
+        choices=ENGINES,
+        default="simple",
+        help="Simulation engine: 'simple' (default) or 'discrete'.",
+    )
+    monte_carlo_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML Monte Carlo report to this path.",
+    )
+
+    monte_carlo_portfolio_parser = subparsers.add_parser(
+        "monte-carlo-portfolio",
+        help="Run a Monte Carlo comparison for several bundled examples and summarize each.",
+    )
+    monte_carlo_portfolio_parser.add_argument(
+        "names",
+        nargs="+",
+        choices=sorted(EXAMPLES),
+        help="Names of the bundled examples to include.",
+    )
+    monte_carlo_portfolio_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per run (default: 200).",
+    )
+    monte_carlo_portfolio_parser.add_argument(
+        "--seeds",
+        type=_parse_int_list,
+        default=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        help="Comma-separated list of seeds to run, e.g. '1,2,3' (default: 1..10).",
+    )
+    monte_carlo_portfolio_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time implementation cost applied to every workflow.",
+    )
+    monte_carlo_portfolio_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+
+    sensitivity_grid_parser = subparsers.add_parser(
+        "sensitivity-grid-example",
+        help="Sweep two assumptions for a bundled example and print an ROI matrix.",
+    )
+    sensitivity_grid_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--x-parameter",
+        choices=PARAMETERS,
+        required=True,
+        help="Parameter to sweep along the x-axis (columns).",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--x-values",
+        type=_parse_float_list,
+        required=True,
+        help="Comma-separated list of x-axis values, e.g. '0.0,0.1,0.2'.",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--y-parameter",
+        choices=PARAMETERS,
+        required=True,
+        help="Parameter to sweep along the y-axis (rows).",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--y-values",
+        type=_parse_float_list,
+        required=True,
+        help="Comma-separated list of y-axis values, e.g. '0.0,0.1,0.2'.",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per grid cell (default: 200).",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="Baseline implementation cost used for every grid cell (default: None).",
+    )
+    sensitivity_grid_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML sensitivity grid report to this path.",
+    )
+
+    capacity_parser = subparsers.add_parser(
+        "capacity-analysis",
+        help="Run one variant of a bundled example and print a capacity/staffing report.",
+    )
+    capacity_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    capacity_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    capacity_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate (default: 200).",
+    )
+    capacity_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    capacity_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    capacity_parser.add_argument(
+        "--target-utilization",
+        type=float,
+        default=DEFAULT_TARGET_UTILIZATION,
+        help=f"Desired steady-state utilization (default: {DEFAULT_TARGET_UTILIZATION}).",
+    )
+    capacity_parser.add_argument(
+        "--overload-threshold",
+        type=float,
+        default=DEFAULT_OVERLOAD_THRESHOLD,
+        help=f"Utilization at/above which a resource is overloaded "
+        f"(default: {DEFAULT_OVERLOAD_THRESHOLD}).",
+    )
+    capacity_parser.add_argument(
+        "--underutilization-threshold",
+        type=float,
+        default=DEFAULT_UNDERUTILIZATION_THRESHOLD,
+        help=f"Utilization at/below which a resource is underutilized "
+        f"(default: {DEFAULT_UNDERUTILIZATION_THRESHOLD}).",
+    )
+    capacity_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML capacity report to this path.",
+    )
+
+    team_utilization_parser = subparsers.add_parser(
+        "team-utilization",
+        help="Run one variant of a bundled example and print raw utilization figures.",
+    )
+    team_utilization_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    team_utilization_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    team_utilization_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate (default: 200).",
+    )
+    team_utilization_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    team_utilization_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+
     return parser
 
 
@@ -741,6 +1205,53 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "load-example":
         return load_example(args.path, args.cases, args.seed)
+
+    if args.command == "monte-carlo-example":
+        return monte_carlo_example(
+            args.name,
+            args.cases,
+            args.seeds,
+            args.implementation_cost,
+            args.arrival_interval,
+            args.engine,
+            args.html_output,
+        )
+
+    if args.command == "monte-carlo-portfolio":
+        return monte_carlo_portfolio(
+            args.names, args.cases, args.seeds, args.implementation_cost, args.arrival_interval
+        )
+
+    if args.command == "sensitivity-grid-example":
+        return sensitivity_grid_example(
+            args.name,
+            args.x_parameter,
+            args.x_values,
+            args.y_parameter,
+            args.y_values,
+            args.cases,
+            args.seed,
+            args.implementation_cost,
+            args.html_output,
+        )
+
+    if args.command == "capacity-analysis":
+        return capacity_analysis(
+            args.name,
+            args.variant,
+            args.cases,
+            args.seed,
+            args.arrival_interval,
+            args.target_utilization,
+            args.overload_threshold,
+            args.underutilization_threshold,
+            args.html_output,
+        )
+
+    if args.command == "team-utilization":
+        return team_utilization(
+            args.name, args.variant, args.cases, args.seed, args.arrival_interval
+        )
 
     parser.print_help()
     return 1
