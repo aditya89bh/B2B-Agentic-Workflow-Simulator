@@ -17,6 +17,7 @@ approval that would otherwise stall past SLA.
 from __future__ import annotations
 
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
+from b2b_workflow_simulator.primitives.duration import DurationModel
 from b2b_workflow_simulator.primitives.edge import Edge
 from b2b_workflow_simulator.primitives.human import HumanActor
 from b2b_workflow_simulator.primitives.node import Node
@@ -78,6 +79,7 @@ def build_before_workflow() -> Workflow:
             actor_id="ap_clerk",
             description="Match the invoice against the PO, receipt, and vendor master data.",
             base_duration_minutes=12.0,
+            duration_model=DurationModel(kind="triangular", minimum=6.0, mode=12.0, maximum=25.0),
         )
     )
     workflow.add_node(
@@ -87,6 +89,7 @@ def build_before_workflow() -> Workflow:
             actor_id="controller",
             description="Review and approve the validated invoice for payment.",
             base_duration_minutes=20.0,
+            duration_model=DurationModel(kind="triangular", minimum=10.0, mode=20.0, maximum=45.0),
         )
     )
     workflow.add_node(
@@ -115,6 +118,7 @@ def build_before_workflow() -> Workflow:
             actor_id="ap_clerk",
             description="Return the invoice to the vendor pending a valid purchase order.",
             base_duration_minutes=15.0,
+            duration_model=DurationModel(kind="uniform", minimum=10.0, maximum=25.0),
             is_terminal=True,
         )
     )
@@ -125,6 +129,7 @@ def build_before_workflow() -> Workflow:
             actor_id="ap_clerk",
             description="Flag the amount mismatch and route back to the vendor for correction.",
             base_duration_minutes=15.0,
+            duration_model=DurationModel(kind="uniform", minimum=10.0, maximum=25.0),
             is_terminal=True,
         )
     )
@@ -135,6 +140,7 @@ def build_before_workflow() -> Workflow:
             actor_id="ap_clerk",
             description="Escalate incomplete or inconsistent vendor master data for correction.",
             base_duration_minutes=15.0,
+            duration_model=DurationModel(kind="uniform", minimum=10.0, maximum=25.0),
             is_terminal=True,
         )
     )
@@ -278,6 +284,7 @@ def build_after_workflow() -> Workflow:
             actor_id="validation_agent",
             description="Automatically match the invoice against PO, receipt, and vendor data.",
             base_duration_minutes=12.0,
+            duration_model=DurationModel(kind="uniform", minimum=8.0, maximum=16.0),
         )
     )
     workflow.add_node(
@@ -287,6 +294,7 @@ def build_after_workflow() -> Workflow:
             actor_id="approval_agent",
             description="Automatically clear the validated invoice under standard policy.",
             base_duration_minutes=20.0,
+            duration_model=DurationModel(kind="uniform", minimum=15.0, maximum=25.0),
         )
     )
     workflow.add_node(
@@ -315,6 +323,7 @@ def build_after_workflow() -> Workflow:
             actor_id="ap_specialist",
             description="Review and resolve the missing purchase order with the vendor.",
             base_duration_minutes=15.0,
+            duration_model=DurationModel(kind="uniform", minimum=10.0, maximum=25.0),
             is_terminal=True,
         )
     )
@@ -325,6 +334,7 @@ def build_after_workflow() -> Workflow:
             actor_id="ap_specialist",
             description="Investigate and resolve the amount mismatch with the vendor.",
             base_duration_minutes=15.0,
+            duration_model=DurationModel(kind="uniform", minimum=10.0, maximum=25.0),
             is_terminal=True,
         )
     )
@@ -335,6 +345,7 @@ def build_after_workflow() -> Workflow:
             actor_id="ap_specialist",
             description="Correct incomplete or inconsistent vendor master data.",
             base_duration_minutes=15.0,
+            duration_model=DurationModel(kind="uniform", minimum=10.0, maximum=25.0),
             is_terminal=True,
         )
     )
