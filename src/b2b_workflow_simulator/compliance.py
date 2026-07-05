@@ -341,6 +341,61 @@ def evaluate_compliance(
     )
 
 
+def _build_compliance_summary(report: ComplianceReport) -> list[str]:
+    if report.requirements_checked == 0:
+        return ["No compliance requirements were attached to this workflow."]
+    lines = [
+        f"{report.requirements_checked} requirement(s) checked against '{report.workflow_name}'.",
+        f"Compliance score: {report.compliance_score:.1f}%.",
+        f"{report.violation_count} violation(s) found.",
+    ]
+    if report.is_compliant:
+        lines.append("The workflow satisfies every attached compliance requirement.")
+    return lines
+
+
+def _build_violation_lines(report: ComplianceReport) -> list[str]:
+    if not report.violations:
+        return ["No violations to report."]
+    return [
+        f"  - [{v.requirement_kind}] {v.requirement_name}: {v.description}"
+        for v in report.violations
+    ]
+
+
+def _build_finding_lines(report: ComplianceReport) -> list[str]:
+    if not report.audit_findings:
+        return ["No audit findings recorded."]
+    return [
+        f"  - [{f.requirement_kind}] {f.requirement_name}: {f.finding}"
+        for f in report.audit_findings
+    ]
+
+
+def generate_compliance_report(report: ComplianceReport) -> str:
+    """Render a `ComplianceReport` as a plain-text audit-ready report."""
+    sections = [
+        "=" * 60,
+        "COMPLIANCE ANALYSIS",
+        "=" * 60,
+        "",
+        f"Workflow: {report.workflow_name}",
+        "",
+        "SUMMARY",
+        "-" * 60,
+        *_build_compliance_summary(report),
+        "",
+        "VIOLATIONS",
+        "-" * 60,
+        *_build_violation_lines(report),
+        "",
+        "AUDIT FINDINGS",
+        "-" * 60,
+        *_build_finding_lines(report),
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "GDPRApprovalRequirement",
     "AuditRequirement",
@@ -354,4 +409,5 @@ __all__ = [
     "AuditFinding",
     "ComplianceReport",
     "evaluate_compliance",
+    "generate_compliance_report",
 ]
