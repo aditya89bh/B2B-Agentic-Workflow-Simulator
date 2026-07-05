@@ -17,6 +17,11 @@ from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.report import generate_portfolio_report, generate_report
+from b2b_workflow_simulator.sensitivity import (
+    PARAMETERS,
+    format_sensitivity_table,
+    run_sensitivity_sweep,
+)
 from b2b_workflow_simulator.simulation import SimulationRunner
 
 EXPORT_FORMATS = ("json", "csv")
@@ -224,6 +229,36 @@ def compare_example(
     return 0
 
 
+def sensitivity_example(
+    example_name: str,
+    parameter: str,
+    values: list[float],
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+) -> int:
+    """Run a sensitivity sweep for a bundled example and print the resulting table."""
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return 1
+
+    build_before, build_after = EXAMPLES[example_name]
+    result = run_sensitivity_sweep(
+        build_before,
+        build_after,
+        parameter,
+        values,
+        num_cases,
+        seed=seed,
+        implementation_cost=implementation_cost,
+    )
+    print(f"Example: {example_name}")
+    print()
+    print(format_sensitivity_table(result))
+    return 0
+
+
 def export_example(
     example_name: str,
     num_cases: int,
@@ -260,6 +295,15 @@ def export_example(
         file_path.write_text(content)
         print(f"  - {file_path}")
     return 0
+
+
+def _parse_float_list(raw: str) -> list[float]:
+    try:
+        return [float(part) for part in raw.split(",")]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected a comma-separated list of numbers, got {raw!r}"
+        ) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -393,6 +437,46 @@ def build_parser() -> argparse.ArgumentParser:
         help="If set, also write a static HTML portfolio report to this path.",
     )
 
+    sensitivity_parser = subparsers.add_parser(
+        "sensitivity-example",
+        help="Sweep one assumption for a bundled example and print a sensitivity table.",
+    )
+    sensitivity_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    sensitivity_parser.add_argument(
+        "--parameter",
+        choices=PARAMETERS,
+        required=True,
+        help="Which assumption to sweep.",
+    )
+    sensitivity_parser.add_argument(
+        "--values",
+        type=_parse_float_list,
+        required=True,
+        help="Comma-separated list of values to test, e.g. '0.0,0.1,0.2'.",
+    )
+    sensitivity_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per value (default: 200).",
+    )
+    sensitivity_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    sensitivity_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="Baseline implementation cost used for every value (default: None).",
+    )
+
     export_parser = subparsers.add_parser(
         "export-example",
         help="Run a bundled example and export events, KPIs, and the comparison to disk.",
@@ -465,6 +549,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "compare-example":
         return compare_example(
             args.name, args.cases, args.seed, args.implementation_cost, args.arrival_interval
+        )
+
+    if args.command == "sensitivity-example":
+        return sensitivity_example(
+            args.name, args.parameter, args.values, args.cases, args.seed, args.implementation_cost
         )
 
     if args.command == "export-example":
