@@ -1,11 +1,13 @@
 from b2b_workflow_simulator.ai_adoption import assess_ai_adoption
 from b2b_workflow_simulator.capacity_planning import analyze_capacity, simulate_hiring
 from b2b_workflow_simulator.compliance import GDPRApprovalRequirement, evaluate_compliance
+from b2b_workflow_simulator.executive_report import build_executive_assessment
 from b2b_workflow_simulator.html_report import (
     render_ai_adoption_html,
     render_capacity_html,
     render_compliance_html,
     render_diff_html,
+    render_executive_html,
     render_hiring_html,
     render_monte_carlo_comparison_html,
     render_monte_carlo_html,
@@ -640,3 +642,71 @@ def test_render_ai_adoption_html_includes_scores_and_recommendation():
     assert "Recommendation:" in output
     assert "Automation readiness" in output
     assert "Reasoning" in output
+
+
+def build_executive_workflow() -> Workflow:
+    workflow = Workflow(workflow_id="wf", name="Executive <script> Flow", entry_node_id="intake")
+    workflow.add_actor(HumanActor(actor_id="clerk", name="Clerk"))
+    workflow.add_node(Node(node_id="intake", name="Intake", actor_id="clerk", is_terminal=True))
+    return workflow
+
+
+def test_render_executive_html_is_well_formed_document():
+    workflow = build_executive_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"intake": 10},
+    )
+
+    assessment = build_executive_assessment(workflow, kpi)
+    output = render_executive_html(assessment)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_executive_html_includes_every_section_heading():
+    workflow = build_executive_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"intake": 10},
+    )
+
+    assessment = build_executive_assessment(workflow, kpi)
+    output = render_executive_html(assessment)
+
+    for heading in (
+        "KPI Summary",
+        "ROI",
+        "SLA Performance",
+        "Compliance",
+        "Policy Violations",
+        "Organizational Risk",
+        "Recommendations",
+        "AI Adoption Assessment",
+    ):
+        assert heading in output
+
+
+def test_render_executive_html_omits_optional_sections_gracefully():
+    workflow = build_executive_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"intake": 10},
+    )
+
+    assessment = build_executive_assessment(workflow, kpi)
+    output = render_executive_html(assessment)
+
+    assert "No redesign comparison supplied" in output
+    assert "No SLA rules supplied" in output
+    assert "No compliance requirements supplied" in output
+    assert "No policies supplied" in output
