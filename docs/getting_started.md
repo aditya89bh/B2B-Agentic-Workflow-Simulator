@@ -166,6 +166,50 @@ utilization, risks, and recommendation as `compare-example`'s
 plain-text report, suitable for emailing to a stakeholder who won't run
 the CLI.
 
+## Assess governance, risk, and AI readiness
+
+Beyond simulating what a workflow costs and how long it takes, the
+simulator can reason about whether a workflow is *allowed* to run the way
+it does, how risky it is, and whether it is ready for more AI:
+
+```bash
+# Governance: does the workflow satisfy its attached business policies
+# and regulatory/compliance requirements?
+b2b-simulator policy-analysis invoice-processing --variant after
+b2b-simulator compliance-analysis invoice-processing --variant after
+
+# Organizational risk: operational, compliance, AI failure, staffing,
+# process complexity, and single-point-of-failure scores, with
+# explainable factors behind each one.
+b2b-simulator risk-analysis invoice-processing --variant after --cases 300
+
+# AI adoption readiness: automation readiness, AI maturity, human
+# dependency, governance, explainability, and rollout complexity,
+# rolled up into a pilot/phased-rollout/full-deployment recommendation.
+b2b-simulator readiness-analysis invoice-processing --variant after --cases 300
+
+# Actionable recommendations: automate this task, keep human review,
+# adjust staffing, merge/split activities, and more -- each with
+# reasoning, affected KPIs, expected benefit, and a confidence level.
+b2b-simulator recommend-redesign invoice-processing --variant after --cases 300
+
+# Executive assessment: KPI summary, ROI, SLA performance, compliance,
+# policy violations, organizational risk, recommendations, and AI
+# adoption, combined into one report (plain text or HTML).
+b2b-simulator executive-report invoice-processing --cases 300 --implementation-cost 8000 --html-output executive.html
+```
+
+`policy-analysis`, `compliance-analysis`, `risk-analysis`, and
+`readiness-analysis` each support `--variant before|after` (default
+`after`) so a governance or risk regression introduced by a redesign can
+be checked directly against the baseline. `executive-report` always
+compares both variants for its ROI section, evaluated against the
+bundled example's attached governance definitions (see
+`src/b2b_workflow_simulator/examples/governance.py`). See
+`docs/policy_engine.md`, `docs/compliance.md`, `docs/risk_engine.md`,
+`docs/recommendation_engine.md`, `docs/ai_adoption.md`, and
+`docs/sla_modeling.md`.
+
 ## Define your own workflow
 
 A workflow is built by registering actors, then nodes (each referencing
