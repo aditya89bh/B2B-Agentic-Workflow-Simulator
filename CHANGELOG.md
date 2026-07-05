@@ -1,5 +1,85 @@
 # Changelog
 
+## Phase 5 - Enterprise Decision-Support Platform
+
+Transformed the simulator from an enterprise workflow simulator into an
+enterprise decision-support platform: the simulator now reasons about
+governance, compliance, business risk, organizational policies, and AI
+adoption, not just workflow execution, while remaining fully backward
+compatible with every prior phase.
+
+- Multi-resource tasks: `Node.additional_actor_ids` lets a task require
+  more than one actor (or pool) simultaneously (e.g. Manager + Legal, AI
+  Agent + Human Reviewer). `multi_resource.py` adds
+  `schedule_multi_resource_execution()`, synchronizing every participant's
+  earliest joint availability across both simulation engines via new
+  non-mutating `ActorScheduler.peek_free_at()`/`PoolScheduler.peek_earliest_start()`
+  methods. `KPIResult` gains `total_coordination_delay_minutes`,
+  `node_coordination_delay_minutes`, and `multi_resource_task_count`.
+  `workflow_io.py` persists `additional_actor_ids` in JSON. Single-actor
+  workflows are byte-for-byte unaffected.
+- Business policy engine: `policy.py` adds `ApprovalPolicy`,
+  `RoutingPolicy`, `EscalationPolicy`, `RetryPolicy`,
+  `BusinessHoursPolicy`, `MandatoryHumanReviewPolicy`, and
+  `SeparationOfDutiesPolicy`, each checked structurally against a
+  `Workflow` by `evaluate_policies()`, producing a `PolicyEvaluation` with
+  severity-classified `PolicyViolation` records and a plain-text report.
+- Compliance engine: `compliance.py` adds `GDPRApprovalRequirement`,
+  `AuditRequirement`, `FinancialApprovalChainRequirement`,
+  `SegregationOfDutiesRequirement`, `MandatoryDocumentationRequirement`,
+  `RecordRetentionRequirement`, and `RegulatoryCheckpointRequirement`,
+  checked by `evaluate_compliance()` into a `ComplianceReport` with
+  violations, a compliance score, and informational `AuditFinding`
+  records.
+- SLA engine: `sla.py` adds `CompletionSLA`, `ResponseSLA`, and
+  `EscalationSLA`, checked by `evaluate_sla()` against a simulation's
+  event log into an `SLAReport` with attainment rate, breach count,
+  average breach duration, breach causes, and estimated financial
+  penalties.
+- Organizational risk engine: `risk.py` adds `compute_risk()`, scoring a
+  workflow across six categories (operational, compliance, AI failure,
+  staffing, process complexity, single point of failure) into a
+  `RiskAssessment` with an overall score and an explainable list of
+  `RiskFactor` records behind every category.
+- Recommendation engine: `recommendation.py` adds
+  `generate_recommendations()`, producing a prioritized `RecommendationSet`
+  of actionable suggestions (automate task, keep human review, increase/
+  reduce staffing, merge/split activities, introduce a memory-enabled
+  agent, introduce/remove an approval gate, redesign an escalation path),
+  each required to carry reasoning, affected KPIs, expected benefit, and a
+  confidence level.
+- AI adoption assessment: `ai_adoption.py` adds `assess_ai_adoption()`,
+  scoring automation readiness, AI maturity, human dependency, governance,
+  explainability, and rollout complexity into a readiness index and a
+  pilot/phased-rollout/full-deployment/not-recommended recommendation.
+- Executive assessment report: `executive_report.py` adds
+  `build_executive_assessment()` and `generate_executive_report()`,
+  combining KPI summary, ROI, SLA performance, compliance, policy
+  violations, organizational risk, recommendations, and AI adoption into
+  one plain-text or HTML report, gracefully omitting any section whose
+  optional input was not supplied.
+- Governance examples: `examples/governance.py` defines concrete,
+  business-realistic policies, compliance requirements, and SLAs for all
+  three bundled example workflows, including scenarios that deliberately
+  surface a segregation-of-duties gap and a mandatory-human-review
+  violation introduced by an AI-augmented redesign.
+- CLI: added `policy-analysis`, `compliance-analysis`, `risk-analysis`,
+  `readiness-analysis`, `recommend-redesign`, and `executive-report`, each
+  supporting `--variant before|after` (where applicable) and an optional
+  `--html-output`.
+- Unit test coverage for multi-resource scheduling and coordination delay,
+  every policy and compliance requirement type and their violations,
+  audit findings, SLA breach detection and penalty calculation, risk
+  scoring across every category, recommendation generation and
+  confidence ranking, AI readiness scoring, executive report assembly and
+  rendering, HTML escaping for every new report type, every new CLI
+  command, and backward compatibility of every prior phase's API.
+- Documentation: updated README, architecture, and getting-started docs;
+  added `docs/policy_engine.md`, `docs/compliance.md`,
+  `docs/sla_modeling.md`, `docs/risk_engine.md`,
+  `docs/recommendation_engine.md`, and `docs/ai_adoption.md`; documented
+  multi-resource tasks in `docs/team_capacity.md`.
+
 ## Phase 4 - Enterprise Process Simulation
 
 Transformed the simulator from a single-process modeling tool into an
