@@ -12,10 +12,11 @@ from b2b_workflow_simulator.examples import (
     sales_lead_qualification,
 )
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
+from b2b_workflow_simulator.html_report import render_portfolio_html
 from b2b_workflow_simulator.kpi import KPIResult
-from b2b_workflow_simulator.portfolio import WorkflowPortfolio
+from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
 from b2b_workflow_simulator.redesign import compare_workflows
-from b2b_workflow_simulator.report import generate_report
+from b2b_workflow_simulator.report import generate_portfolio_report, generate_report
 from b2b_workflow_simulator.simulation import SimulationRunner
 
 EXPORT_FORMATS = ("json", "csv")
@@ -181,6 +182,30 @@ def run_example(example_name: str, num_cases: int, seed: int | None) -> int:
     return 0
 
 
+def compare_portfolio(
+    example_names: list[str],
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+    rank_by: str,
+    html_output: str | None,
+) -> int:
+    """Run several bundled examples and print a full portfolio report."""
+    portfolio = _build_portfolio(
+        example_names, num_cases, seed, implementation_cost, arrival_interval_minutes
+    )
+    if portfolio is None:
+        return 1
+
+    print(generate_portfolio_report(portfolio, rank_by=rank_by))
+
+    if html_output:
+        Path(html_output).write_text(render_portfolio_html(portfolio, rank_by=rank_by))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
 def compare_example(
     example_name: str,
     num_cases: int,
@@ -322,6 +347,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minutes between case arrivals; enables capacity-aware queueing.",
     )
 
+    compare_portfolio_parser = subparsers.add_parser(
+        "compare-portfolio",
+        help="Run several bundled examples together and print a full portfolio report.",
+    )
+    compare_portfolio_parser.add_argument(
+        "names",
+        nargs="+",
+        choices=sorted(EXAMPLES),
+        help="Names of the bundled examples to include in the portfolio.",
+    )
+    compare_portfolio_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per variant (default: 200).",
+    )
+    compare_portfolio_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    compare_portfolio_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time implementation cost applied to every workflow in the portfolio.",
+    )
+    compare_portfolio_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    compare_portfolio_parser.add_argument(
+        "--rank-by",
+        choices=RANK_BY_OPTIONS,
+        default="total_cost_savings",
+        help="Metric used to rank workflows (default: total_cost_savings).",
+    )
+    compare_portfolio_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML portfolio report to this path.",
+    )
+
     export_parser = subparsers.add_parser(
         "export-example",
         help="Run a bundled example and export events, KPIs, and the comparison to disk.",
@@ -379,6 +450,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run-portfolio":
         return run_portfolio(args.names, args.cases, args.seed)
+
+    if args.command == "compare-portfolio":
+        return compare_portfolio(
+            args.names,
+            args.cases,
+            args.seed,
+            args.implementation_cost,
+            args.arrival_interval,
+            args.rank_by,
+            args.html_output,
+        )
 
     if args.command == "compare-example":
         return compare_example(
