@@ -86,6 +86,17 @@ class ActorScheduler:
         wait_minutes = start - ready_time
         return ScheduledTask(start=start, wait_minutes=wait_minutes, end=start + duration)
 
+    def peek_free_at(self, actor_id: str) -> float:
+        """Return when `actor_id` next becomes free, without reserving any time.
+
+        Returns 0.0 for an actor that has not been scheduled yet. Used by
+        multi-resource task scheduling to find the earliest time every
+        required actor could start together before committing any of
+        their reservations.
+        """
+        state = self._states.get(actor_id)
+        return state.free_at if state else 0.0
+
     def utilization(self, actor_id: str, available_hours_per_day: float) -> float:
         """Return busy time as a fraction of total capacity across active days.
 
