@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from b2b_workflow_simulator.primitives.duration import DurationModel
+
 
 @dataclass
 class Node:
@@ -21,6 +23,8 @@ class Node:
         description: Longer explanation of the work performed at this stage.
         actor_id: Identifier of the actor (human or AI agent) assigned to this node.
         base_duration_minutes: Expected effort in minutes before actor multipliers.
+        duration_model: How actual duration varies around `base_duration_minutes`
+            from one case to the next. Defaults to a fixed, non-random duration.
         is_terminal: Whether reaching this node ends the case successfully.
         metadata: Free-form extension bag for domain-specific attributes.
     """
@@ -30,6 +34,7 @@ class Node:
     actor_id: str
     description: str = ""
     base_duration_minutes: float = 0.0
+    duration_model: DurationModel = field(default_factory=DurationModel)
     is_terminal: bool = False
     metadata: dict = field(default_factory=dict)
 
