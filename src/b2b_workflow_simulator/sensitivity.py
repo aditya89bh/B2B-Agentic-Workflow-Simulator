@@ -70,7 +70,8 @@ class SensitivityResult:
         return None
 
 
-def _set_actor_field(workflow: Workflow, actor_type: type, field_name: str, value: float) -> None:
+def set_actor_field(workflow: Workflow, actor_type: type, field_name: str, value: float) -> None:
+    """Set `field_name = value` on every actor of `actor_type` in `workflow`."""
     for actor in workflow.actors.values():
         if isinstance(actor, actor_type):
             setattr(actor, field_name, value)
@@ -144,12 +145,12 @@ def run_sensitivity_sweep(
         arrival_interval_minutes = None
 
         if parameter == "ai_error_rate":
-            _set_actor_field(after_workflow, AIAgentActor, "error_rate", value)
+            set_actor_field(after_workflow, AIAgentActor, "error_rate", value)
         elif parameter == "ai_cost_per_execution":
-            _set_actor_field(after_workflow, AIAgentActor, "cost_per_execution", value)
+            set_actor_field(after_workflow, AIAgentActor, "cost_per_execution", value)
         elif parameter == "human_hourly_cost":
-            _set_actor_field(before_workflow, HumanActor, "hourly_cost", value)
-            _set_actor_field(after_workflow, HumanActor, "hourly_cost", value)
+            set_actor_field(before_workflow, HumanActor, "hourly_cost", value)
+            set_actor_field(after_workflow, HumanActor, "hourly_cost", value)
         elif parameter == "arrival_interval":
             arrival_interval_minutes = value
 
@@ -200,4 +201,5 @@ __all__ = [
     "SensitivityResult",
     "run_sensitivity_sweep",
     "format_sensitivity_table",
+    "set_actor_field",
 ]
