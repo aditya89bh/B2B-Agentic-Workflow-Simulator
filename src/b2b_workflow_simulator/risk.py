@@ -332,7 +332,7 @@ def compute_risk(
     )
 
 
-_CATEGORY_LABELS = {
+CATEGORY_LABELS = {
     OPERATIONAL: "Operational",
     COMPLIANCE: "Compliance",
     AI_FAILURE: "AI Failure",
@@ -353,7 +353,7 @@ def generate_risk_report(assessment: RiskAssessment) -> str:
     ]
     for category in CATEGORIES:
         score = assessment.category_scores.get(category, 0.0)
-        lines.append(f"  - {_CATEGORY_LABELS[category]}: {score:.1f}/100")
+        lines.append(f"  - {CATEGORY_LABELS[category]}: {score:.1f}/100")
 
     lines.append("")
     lines.append("Risk factors:")
@@ -363,7 +363,7 @@ def generate_risk_report(assessment: RiskAssessment) -> str:
         category_factors = assessment.factors_for(category)
         if not category_factors:
             continue
-        lines.append(f"  {_CATEGORY_LABELS[category]}:")
+        lines.append(f"  {CATEGORY_LABELS[category]}:")
         for factor in sorted(category_factors, key=lambda f: f.weight, reverse=True):
             lines.append(f"    - {factor.description} (weight: {factor.weight:.1f})")
 
@@ -378,6 +378,7 @@ __all__ = [
     "PROCESS_COMPLEXITY",
     "SINGLE_POINT_OF_FAILURE",
     "CATEGORIES",
+    "CATEGORY_LABELS",
     "RiskFactor",
     "RiskAssessment",
     "compute_risk",
