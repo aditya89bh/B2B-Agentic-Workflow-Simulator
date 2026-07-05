@@ -6,7 +6,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from b2b_workflow_simulator.examples import invoice_processing, sales_lead_qualification
+from b2b_workflow_simulator.examples import (
+    customer_support_ticket_resolution,
+    invoice_processing,
+    sales_lead_qualification,
+)
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.redesign import compare_workflows
@@ -23,6 +27,10 @@ EXAMPLES = {
     "invoice-processing": (
         invoice_processing.build_before_workflow,
         invoice_processing.build_after_workflow,
+    ),
+    "customer-support-ticket-resolution": (
+        customer_support_ticket_resolution.build_before_workflow,
+        customer_support_ticket_resolution.build_after_workflow,
     ),
 }
 
