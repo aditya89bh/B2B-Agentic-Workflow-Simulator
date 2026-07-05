@@ -232,6 +232,66 @@ def test_compare_example_rejects_unknown_example(capsys):
     assert "Unknown example" in error_output
 
 
+def test_sensitivity_example_prints_table_and_break_even(capsys):
+    exit_code = main(
+        [
+            "sensitivity-example",
+            "invoice-processing",
+            "--parameter",
+            "ai_cost_per_execution",
+            "--values",
+            "0,5,10,20",
+            "--cases",
+            "100",
+            "--seed",
+            "1",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Sensitivity: ai_cost_per_execution" in output
+    assert "Break-even" in output
+
+
+def test_sensitivity_example_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import sensitivity_example
+
+    exit_code = sensitivity_example("not-a-real-example", "ai_error_rate", [0.1], 10, 1, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_sensitivity_example_parses_comma_separated_values():
+    from b2b_workflow_simulator.cli import _parse_float_list
+
+    assert _parse_float_list("0.0,0.1,0.2") == [0.0, 0.1, 0.2]
+
+
+def test_sensitivity_example_rejects_malformed_values():
+    from b2b_workflow_simulator.cli import build_parser
+
+    parser = build_parser()
+    exit_code = None
+    try:
+        parser.parse_args(
+            [
+                "sensitivity-example",
+                "invoice-processing",
+                "--parameter",
+                "ai_error_rate",
+                "--values",
+                "not-a-number",
+            ]
+        )
+    except SystemExit as exc:
+        exit_code = exc.code
+
+    assert exit_code == 2
+
+
 def test_export_example_writes_json_files(tmp_path):
     output_dir = tmp_path / "exports"
     exit_code = main(
