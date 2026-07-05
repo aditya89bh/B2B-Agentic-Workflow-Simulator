@@ -9,6 +9,7 @@ from b2b_workflow_simulator.html_report import (
     render_monte_carlo_html,
     render_policy_html,
     render_portfolio_html,
+    render_recommendation_html,
     render_risk_html,
     render_sensitivity_grid_html,
     render_sla_html,
@@ -23,6 +24,7 @@ from b2b_workflow_simulator.primitives.event import Event, EventType
 from b2b_workflow_simulator.primitives.human import HumanActor
 from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.primitives.worker import Worker
+from b2b_workflow_simulator.recommendation import generate_recommendations
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.risk import compute_risk
 from b2b_workflow_simulator.sensitivity_grid import run_sensitivity_grid
@@ -541,3 +543,55 @@ def test_render_risk_html_handles_no_factors():
     output = render_risk_html(assessment)
 
     assert "No risk factors identified." in output
+
+
+def build_recommendation_workflow() -> Workflow:
+    workflow = Workflow(workflow_id="wf", name="Recs <script>", entry_node_id="intake")
+    workflow.add_actor(HumanActor(actor_id="clerk", name="Clerk"))
+    workflow.add_node(Node(node_id="intake", name="Intake", actor_id="clerk", is_terminal=True))
+    return workflow
+
+
+def test_render_recommendation_html_is_well_formed_document():
+    workflow = build_recommendation_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"intake": 10},
+    )
+
+    recommendations = generate_recommendations(workflow, kpi)
+    output = render_recommendation_html(recommendations)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_recommendation_html_includes_reasoning_and_benefit():
+    workflow = build_recommendation_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"intake": 10},
+    )
+
+    recommendations = generate_recommendations(workflow, kpi)
+    output = render_recommendation_html(recommendations)
+
+    assert "Automate" in output
+    assert "Affected KPIs" in output
+    assert "Expected benefit" in output
+
+
+def test_render_recommendation_html_handles_no_recommendations():
+    workflow = build_recommendation_workflow()
+    kpi = KPIResult(workflow_name=workflow.name, total_cases=0)
+
+    recommendations = generate_recommendations(workflow, kpi)
+    output = render_recommendation_html(recommendations)
+
+    assert "No actionable recommendations at this time." in output
