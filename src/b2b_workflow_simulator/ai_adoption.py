@@ -281,7 +281,7 @@ def assess_ai_adoption(
     )
 
 
-_RECOMMENDATION_LABELS = {
+RECOMMENDATION_LABELS = {
     PILOT: "Pilot",
     PHASED_ROLLOUT: "Phased rollout",
     FULL_DEPLOYMENT: "Full deployment",
@@ -295,7 +295,7 @@ def generate_ai_adoption_report(assessment: AIAdoptionAssessment) -> str:
         f"AI Adoption Assessment: {assessment.workflow_name}",
         "=" * 60,
         f"Readiness index: {assessment.readiness_index:.1f}/100",
-        f"Recommendation: {_RECOMMENDATION_LABELS[assessment.recommendation]}",
+        f"Recommendation: {RECOMMENDATION_LABELS[assessment.recommendation]}",
         "",
         "Scores:",
         f"  - Automation readiness: {assessment.automation_readiness:.1f}/100",
@@ -316,6 +316,7 @@ __all__ = [
     "PHASED_ROLLOUT",
     "FULL_DEPLOYMENT",
     "NOT_RECOMMENDED",
+    "RECOMMENDATION_LABELS",
     "AIAdoptionAssessment",
     "assess_ai_adoption",
     "generate_ai_adoption_report",
