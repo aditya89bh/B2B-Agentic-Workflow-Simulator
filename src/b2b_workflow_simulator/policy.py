@@ -384,6 +384,58 @@ def evaluate_policies(workflow: Workflow, policies: list[Policy]) -> PolicyEvalu
     )
 
 
+def _build_evaluation_summary(evaluation: PolicyEvaluation) -> list[str]:
+    if evaluation.policies_checked == 0:
+        return ["No policies were attached to this workflow."]
+    lines = [
+        f"{evaluation.policies_checked} polic{'y' if evaluation.policies_checked == 1 else 'ies'} "
+        f"checked against '{evaluation.workflow_name}'.",
+        f"{evaluation.violation_count} violation(s) found: "
+        f"{evaluation.error_count} error(s), {evaluation.warning_count} warning(s).",
+    ]
+    if evaluation.is_compliant:
+        lines.append("The workflow satisfies every attached policy.")
+    return lines
+
+
+def _build_violation_table(evaluation: PolicyEvaluation) -> list[str]:
+    if not evaluation.violations:
+        return ["No violations to report."]
+    header = f"{'Policy':<24}{'Kind':<22}{'Node':<18}{'Severity':>10}"
+    lines = [header, "-" * len(header)]
+    for violation in evaluation.violations:
+        node_label = violation.node_id or "-"
+        lines.append(
+            f"{violation.policy_name:<24}{violation.policy_kind:<22}"
+            f"{node_label:<18}{violation.severity:>10}"
+        )
+    return lines
+
+
+def generate_policy_report(evaluation: PolicyEvaluation) -> str:
+    """Render a `PolicyEvaluation` as a plain-text governance report."""
+    sections = [
+        "=" * 60,
+        "POLICY COMPLIANCE ANALYSIS",
+        "=" * 60,
+        "",
+        f"Workflow: {evaluation.workflow_name}",
+        "",
+        "SUMMARY",
+        "-" * 60,
+        *_build_evaluation_summary(evaluation),
+        "",
+        "VIOLATIONS",
+        "-" * 60,
+        *_build_violation_table(evaluation),
+        "",
+        "DETAILS",
+        "-" * 60,
+        *[f"  - [{v.severity}] {v.description}" for v in evaluation.violations],
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "ApprovalPolicy",
     "RoutingPolicy",
@@ -396,6 +448,7 @@ __all__ = [
     "PolicyViolation",
     "PolicyEvaluation",
     "evaluate_policies",
+    "generate_policy_report",
     "SEVERITY_ERROR",
     "SEVERITY_WARNING",
 ]
