@@ -1,5 +1,6 @@
 import pytest
 
+from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
 from b2b_workflow_simulator.primitives.duration import DurationModel
 from b2b_workflow_simulator.primitives.edge import Edge
@@ -210,6 +211,36 @@ def test_uncontended_run_never_emits_queued_events():
     event_types = [event.event_type for event in result.events]
     assert EventType.TASK_QUEUED not in event_types
     assert EventType.RESOURCE_RELEASED not in event_types
+
+
+def test_run_rejects_both_arrival_interval_and_arrival_model():
+    workflow = build_linear_workflow()
+    model = ArrivalModel(kind="fixed", interval_minutes=10.0)
+
+    with pytest.raises(ValueError, match="arrival_interval_minutes or arrival_model"):
+        SimulationRunner(seed=1).run(
+            workflow, 5, arrival_interval_minutes=10.0, arrival_model=model
+        )
+
+
+def test_run_with_arrival_model_produces_capacity_aware_results():
+    workflow = build_linear_workflow(error_rate=0.0)
+    model = ArrivalModel(kind="fixed", interval_minutes=1.0)
+
+    result = SimulationRunner(seed=1).run(workflow, 30, arrival_model=model)
+
+    assert result.kpi.total_wait_minutes > 0.0
+    assert result.kpi.actor_utilization["rep"] > 0.0
+
+
+def test_run_with_arrival_model_is_deterministic_given_same_seed():
+    workflow = build_linear_workflow(error_rate=0.0)
+    model = ArrivalModel(kind="uniform", min_interval_minutes=5.0, max_interval_minutes=20.0)
+
+    result_a = SimulationRunner(seed=9).run(workflow, 30, arrival_model=model)
+    result_b = SimulationRunner(seed=9).run(workflow, 30, arrival_model=model)
+
+    assert result_a.kpi == result_b.kpi
 
 
 def test_run_counts_ai_agent_escalations():
