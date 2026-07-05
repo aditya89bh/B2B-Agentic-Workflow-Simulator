@@ -50,6 +50,28 @@ def test_run_example_is_deterministic_for_a_fixed_seed(capsys):
     assert first_output == second_output
 
 
+def test_run_example_supports_discrete_engine(capsys):
+    exit_code = main(
+        ["run-example", "sales-lead-qualification", "--cases", "20", "--engine", "discrete"]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Engine: discrete" in output
+
+
+def test_run_example_rejects_unknown_engine():
+    parser = build_parser()
+
+    exit_code = None
+    try:
+        parser.parse_args(["run-example", "sales-lead-qualification", "--engine", "quantum"])
+    except SystemExit as exc:
+        exit_code = exc.code
+
+    assert exit_code == 2
+
+
 def test_run_example_supports_invoice_processing(capsys):
     exit_code = main(["run-example", "invoice-processing", "--cases", "20", "--seed", "1"])
     output = capsys.readouterr().out
@@ -220,6 +242,25 @@ def test_compare_example_supports_arrival_interval(capsys):
 
     assert exit_code == 0
     assert "ACTOR UTILIZATION" in output
+
+
+def test_compare_example_supports_discrete_engine(capsys):
+    exit_code = main(
+        [
+            "compare-example",
+            "sales-lead-qualification",
+            "--cases",
+            "30",
+            "--seed",
+            "1",
+            "--engine",
+            "discrete",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "WORKFLOW REDESIGN ANALYSIS" in output
 
 
 def test_compare_example_rejects_unknown_example(capsys):
