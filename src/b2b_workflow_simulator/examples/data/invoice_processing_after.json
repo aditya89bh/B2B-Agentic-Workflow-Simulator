@@ -1,0 +1,237 @@
+{
+  "workflow_id": "invoice-processing-after",
+  "name": "Invoice Processing (After: AI-Augmented)",
+  "description": "Redesigned process where AI agents handle straight-through invoice processing end to end, and a human AP Specialist reviews only the invoices that fail automated validation or approval.",
+  "entry_node_id": "invoice_intake",
+  "actors": [
+    {
+      "actor_id": "intake_agent",
+      "name": "Invoice Intake Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.12,
+      "speed_multiplier": 0.06,
+      "error_rate": 0.02,
+      "escalation_rate": 0.03,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "validation_agent",
+      "name": "Invoice Validation Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.35,
+      "speed_multiplier": 0.08,
+      "error_rate": 0.03,
+      "escalation_rate": 0.05,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "approval_agent",
+      "name": "Invoice Approval Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.25,
+      "speed_multiplier": 0.05,
+      "error_rate": 0.02,
+      "escalation_rate": 0.05,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "ap_specialist",
+      "name": "AP Specialist",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 40.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.03
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "invoice_intake",
+      "name": "Invoice Intake",
+      "actor_id": "intake_agent",
+      "description": "Extract structured invoice data from the incoming document.",
+      "base_duration_minutes": 8.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "validation",
+      "name": "Validation",
+      "actor_id": "validation_agent",
+      "description": "Automatically match the invoice against PO, receipt, and vendor data.",
+      "base_duration_minutes": 12.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 8.0,
+        "maximum": 16.0,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "approval",
+      "name": "Approval",
+      "actor_id": "approval_agent",
+      "description": "Automatically clear the validated invoice under standard policy.",
+      "base_duration_minutes": 20.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 15.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "erp_entry",
+      "name": "ERP Entry",
+      "actor_id": "approval_agent",
+      "description": "Post the approved invoice into the ERP system automatically.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "payment_scheduling",
+      "name": "Payment Scheduling",
+      "actor_id": "approval_agent",
+      "description": "Schedule the payment run for the posted invoice automatically.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_missing_po",
+      "name": "Exception: Missing PO",
+      "actor_id": "ap_specialist",
+      "description": "Review and resolve the missing purchase order with the vendor.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_mismatched_amount",
+      "name": "Exception: Mismatched Amount",
+      "actor_id": "ap_specialist",
+      "description": "Investigate and resolve the amount mismatch with the vendor.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_vendor_data_issue",
+      "name": "Exception: Vendor Data Issue",
+      "actor_id": "ap_specialist",
+      "description": "Correct incomplete or inconsistent vendor master data.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_approval_delay",
+      "name": "Exception: Approval Delay",
+      "actor_id": "ap_specialist",
+      "description": "Manually review an invoice the approval agent could not clear.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "invoice_intake",
+      "target": "validation",
+      "probability": 1.0,
+      "condition": ""
+    },
+    {
+      "source": "validation",
+      "target": "approval",
+      "probability": 0.65,
+      "condition": "matched"
+    },
+    {
+      "source": "validation",
+      "target": "exception_missing_po",
+      "probability": 0.1,
+      "condition": "missing_po"
+    },
+    {
+      "source": "validation",
+      "target": "exception_mismatched_amount",
+      "probability": 0.15,
+      "condition": "mismatched_amount"
+    },
+    {
+      "source": "validation",
+      "target": "exception_vendor_data_issue",
+      "probability": 0.1,
+      "condition": "vendor_data_issue"
+    },
+    {
+      "source": "approval",
+      "target": "erp_entry",
+      "probability": 0.97,
+      "condition": "approved"
+    },
+    {
+      "source": "approval",
+      "target": "exception_approval_delay",
+      "probability": 0.03,
+      "condition": "requires_human_review"
+    },
+    {
+      "source": "erp_entry",
+      "target": "payment_scheduling",
+      "probability": 1.0,
+      "condition": ""
+    }
+  ]
+}

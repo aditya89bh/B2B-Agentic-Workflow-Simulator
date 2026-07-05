@@ -1,0 +1,213 @@
+{
+  "workflow_id": "invoice-processing-before",
+  "name": "Invoice Processing (Before: Manual)",
+  "description": "Baseline accounts payable process where AP Clerks and a Controller manually intake, validate, approve, and post every vendor invoice.",
+  "entry_node_id": "invoice_intake",
+  "actors": [
+    {
+      "actor_id": "ap_clerk",
+      "name": "AP Clerk",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 28.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.04
+    },
+    {
+      "actor_id": "controller",
+      "name": "Controller",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 55.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.03
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "invoice_intake",
+      "name": "Invoice Intake",
+      "actor_id": "ap_clerk",
+      "description": "Log the incoming invoice and attach it to the vendor record.",
+      "base_duration_minutes": 8.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "validation",
+      "name": "Validation",
+      "actor_id": "ap_clerk",
+      "description": "Match the invoice against the PO, receipt, and vendor master data.",
+      "base_duration_minutes": 12.0,
+      "duration_model": {
+        "kind": "triangular",
+        "minimum": 6.0,
+        "maximum": 25.0,
+        "mode": 12.0
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "approval",
+      "name": "Approval",
+      "actor_id": "controller",
+      "description": "Review and approve the validated invoice for payment.",
+      "base_duration_minutes": 20.0,
+      "duration_model": {
+        "kind": "triangular",
+        "minimum": 10.0,
+        "maximum": 45.0,
+        "mode": 20.0
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "erp_entry",
+      "name": "ERP Entry",
+      "actor_id": "ap_clerk",
+      "description": "Post the approved invoice into the ERP system.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "payment_scheduling",
+      "name": "Payment Scheduling",
+      "actor_id": "ap_clerk",
+      "description": "Schedule the payment run for the posted invoice.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_missing_po",
+      "name": "Exception: Missing PO",
+      "actor_id": "ap_clerk",
+      "description": "Return the invoice to the vendor pending a valid purchase order.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_mismatched_amount",
+      "name": "Exception: Mismatched Amount",
+      "actor_id": "ap_clerk",
+      "description": "Flag the amount mismatch and route back to the vendor for correction.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_vendor_data_issue",
+      "name": "Exception: Vendor Data Issue",
+      "actor_id": "ap_clerk",
+      "description": "Escalate incomplete or inconsistent vendor master data for correction.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_approval_delay",
+      "name": "Exception: Approval Delay",
+      "actor_id": "controller",
+      "description": "Log an invoice that stalled in the approval queue past SLA.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "invoice_intake",
+      "target": "validation",
+      "probability": 1.0,
+      "condition": ""
+    },
+    {
+      "source": "validation",
+      "target": "approval",
+      "probability": 0.65,
+      "condition": "matched"
+    },
+    {
+      "source": "validation",
+      "target": "exception_missing_po",
+      "probability": 0.1,
+      "condition": "missing_po"
+    },
+    {
+      "source": "validation",
+      "target": "exception_mismatched_amount",
+      "probability": 0.15,
+      "condition": "mismatched_amount"
+    },
+    {
+      "source": "validation",
+      "target": "exception_vendor_data_issue",
+      "probability": 0.1,
+      "condition": "vendor_data_issue"
+    },
+    {
+      "source": "approval",
+      "target": "erp_entry",
+      "probability": 0.85,
+      "condition": "approved"
+    },
+    {
+      "source": "approval",
+      "target": "exception_approval_delay",
+      "probability": 0.15,
+      "condition": "stalled_past_sla"
+    },
+    {
+      "source": "erp_entry",
+      "target": "payment_scheduling",
+      "probability": 1.0,
+      "condition": ""
+    }
+  ]
+}

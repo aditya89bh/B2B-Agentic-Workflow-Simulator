@@ -1,0 +1,219 @@
+{
+  "workflow_id": "customer-support-ticket-resolution-before",
+  "name": "Customer Support Ticket Resolution (Before: Manual)",
+  "description": "Baseline support process where a Support Agent manually triages, drafts responses to, and follows up on every customer ticket, escalating complex cases to a Specialist.",
+  "entry_node_id": "ticket_intake",
+  "actors": [
+    {
+      "actor_id": "support_agent",
+      "name": "Support Agent",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 25.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.02
+    },
+    {
+      "actor_id": "specialist",
+      "name": "Specialist",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 45.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.02
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "ticket_intake",
+      "name": "Ticket Intake",
+      "actor_id": "support_agent",
+      "description": "Log the incoming ticket and capture customer/account context.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "triage",
+      "name": "Triage",
+      "actor_id": "support_agent",
+      "description": "Classify the ticket type and priority.",
+      "base_duration_minutes": 8.0,
+      "duration_model": {
+        "kind": "triangular",
+        "minimum": 4.0,
+        "maximum": 18.0,
+        "mode": 8.0
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "response_drafting",
+      "name": "Response Drafting",
+      "actor_id": "support_agent",
+      "description": "Draft a resolution response for the customer.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "triangular",
+        "minimum": 8.0,
+        "maximum": 35.0,
+        "mode": 15.0
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "escalation",
+      "name": "Escalation",
+      "actor_id": "specialist",
+      "description": "Investigate and resolve a complex or high-priority ticket.",
+      "base_duration_minutes": 25.0,
+      "duration_model": {
+        "kind": "triangular",
+        "minimum": 15.0,
+        "maximum": 60.0,
+        "mode": 25.0
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "follow_up",
+      "name": "Follow-Up",
+      "actor_id": "support_agent",
+      "description": "Confirm the resolution with the customer and close the ticket.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_wrong_classification",
+      "name": "Exception: Wrong Classification",
+      "actor_id": "support_agent",
+      "description": "Re-triage a ticket that was routed to the wrong queue.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 5.0,
+        "maximum": 18.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_missing_customer_context",
+      "name": "Exception: Missing Customer Context",
+      "actor_id": "support_agent",
+      "description": "Request additional account details from the customer before proceeding.",
+      "base_duration_minutes": 12.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 6.0,
+        "maximum": 20.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_low_confidence",
+      "name": "Exception: Low-Confidence Response",
+      "actor_id": "specialist",
+      "description": "Review a response the Support Agent was not confident about.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 8.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_delayed_escalation",
+      "name": "Exception: Delayed Escalation",
+      "actor_id": "specialist",
+      "description": "Log and remediate an escalation that breached its SLA.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "ticket_intake",
+      "target": "triage",
+      "probability": 1.0,
+      "condition": ""
+    },
+    {
+      "source": "triage",
+      "target": "response_drafting",
+      "probability": 0.55,
+      "condition": "straightforward"
+    },
+    {
+      "source": "triage",
+      "target": "escalation",
+      "probability": 0.2,
+      "condition": "needs_escalation"
+    },
+    {
+      "source": "triage",
+      "target": "exception_wrong_classification",
+      "probability": 0.1,
+      "condition": "wrong_classification"
+    },
+    {
+      "source": "triage",
+      "target": "exception_missing_customer_context",
+      "probability": 0.15,
+      "condition": "missing_customer_context"
+    },
+    {
+      "source": "response_drafting",
+      "target": "follow_up",
+      "probability": 0.85,
+      "condition": "resolved"
+    },
+    {
+      "source": "response_drafting",
+      "target": "exception_low_confidence",
+      "probability": 0.15,
+      "condition": "low_confidence"
+    },
+    {
+      "source": "escalation",
+      "target": "follow_up",
+      "probability": 0.8,
+      "condition": "resolved"
+    },
+    {
+      "source": "escalation",
+      "target": "exception_delayed_escalation",
+      "probability": 0.2,
+      "condition": "delayed_escalation"
+    }
+  ]
+}
