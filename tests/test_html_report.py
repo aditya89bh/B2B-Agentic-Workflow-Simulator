@@ -1,7 +1,17 @@
-from b2b_workflow_simulator.html_report import render_diff_html, render_portfolio_html
+from b2b_workflow_simulator.html_report import (
+    render_diff_html,
+    render_monte_carlo_comparison_html,
+    render_monte_carlo_html,
+    render_portfolio_html,
+)
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.monte_carlo import run_monte_carlo, run_monte_carlo_comparison
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
+from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
+from b2b_workflow_simulator.primitives.human import HumanActor
+from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.redesign import compare_workflows
+from b2b_workflow_simulator.workflow import Workflow
 
 
 def make_before_kpi(name: str = "Before") -> KPIResult:
@@ -138,3 +148,85 @@ def test_render_portfolio_html_handles_empty_portfolio():
     output = render_portfolio_html(portfolio)
 
     assert "0 workflow(s)" in output
+
+
+def build_mc_workflow(name: str = "Monte Carlo Test <script>") -> Workflow:
+    workflow = Workflow(workflow_id="mc-test", name=name, entry_node_id="review")
+    workflow.add_actor(
+        HumanActor(actor_id="agent", name="Agent", hourly_cost=30.0, error_rate=0.1)
+    )
+    workflow.add_node(
+        Node(
+            node_id="review",
+            name="Review",
+            actor_id="agent",
+            base_duration_minutes=20.0,
+            is_terminal=True,
+        )
+    )
+    return workflow
+
+
+def build_mc_after_workflow() -> Workflow:
+    workflow = Workflow(workflow_id="mc-after", name="Monte Carlo After", entry_node_id="ai")
+    workflow.add_actor(
+        AIAgentActor(actor_id="ai", name="AI Reviewer", cost_per_execution=1.0, error_rate=0.05)
+    )
+    workflow.add_node(
+        Node(
+            node_id="ai",
+            name="AI Review",
+            actor_id="ai",
+            base_duration_minutes=2.0,
+            is_terminal=True,
+        )
+    )
+    return workflow
+
+
+def test_render_monte_carlo_html_is_well_formed_document():
+    result = run_monte_carlo(build_mc_workflow, 20, [1, 2, 3])
+
+    output = render_monte_carlo_html(result)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+
+
+def test_render_monte_carlo_html_includes_expected_sections():
+    result = run_monte_carlo(build_mc_workflow, 20, [1, 2, 3])
+
+    output = render_monte_carlo_html(result)
+
+    assert "Executive Summary" in output
+    assert "Metric Distribution" in output
+    assert "3 simulated runs" in output
+
+
+def test_render_monte_carlo_html_escapes_workflow_name():
+    result = run_monte_carlo(build_mc_workflow, 20, [1, 2, 3])
+
+    output = render_monte_carlo_html(result)
+
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_monte_carlo_comparison_html_is_well_formed_document():
+    result = run_monte_carlo_comparison(
+        build_mc_workflow, build_mc_after_workflow, 20, [1, 2, 3], implementation_cost=50.0
+    )
+
+    output = render_monte_carlo_comparison_html(result)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "Payback" in output
+
+
+def test_render_monte_carlo_comparison_html_handles_missing_payback():
+    result = run_monte_carlo_comparison(build_mc_workflow, build_mc_after_workflow, 20, [1, 2, 3])
+
+    output = render_monte_carlo_comparison_html(result)
+
+    assert "n/a" in output
