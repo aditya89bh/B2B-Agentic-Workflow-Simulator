@@ -1,6 +1,8 @@
+from b2b_workflow_simulator.ai_adoption import assess_ai_adoption
 from b2b_workflow_simulator.capacity_planning import analyze_capacity, simulate_hiring
 from b2b_workflow_simulator.compliance import GDPRApprovalRequirement, evaluate_compliance
 from b2b_workflow_simulator.html_report import (
+    render_ai_adoption_html,
     render_capacity_html,
     render_compliance_html,
     render_diff_html,
@@ -595,3 +597,46 @@ def test_render_recommendation_html_handles_no_recommendations():
     output = render_recommendation_html(recommendations)
 
     assert "No actionable recommendations at this time." in output
+
+
+def build_ai_adoption_workflow() -> Workflow:
+    workflow = Workflow(workflow_id="wf", name="AI <script> Flow", entry_node_id="a")
+    workflow.add_actor(AIAgentActor(actor_id="agent", name="Agent"))
+    workflow.add_node(Node(node_id="a", name="A", actor_id="agent", is_terminal=True))
+    return workflow
+
+
+def test_render_ai_adoption_html_is_well_formed_document():
+    workflow = build_ai_adoption_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"a": 10},
+    )
+
+    assessment = assess_ai_adoption(workflow, kpi)
+    output = render_ai_adoption_html(assessment)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_ai_adoption_html_includes_scores_and_recommendation():
+    workflow = build_ai_adoption_workflow()
+    kpi = KPIResult(
+        workflow_name=workflow.name,
+        total_cases=10,
+        completed_cases=10,
+        node_visit_counts={"a": 10},
+    )
+
+    assessment = assess_ai_adoption(workflow, kpi)
+    output = render_ai_adoption_html(assessment)
+
+    assert "Readiness index" in output
+    assert "Recommendation:" in output
+    assert "Automation readiness" in output
+    assert "Reasoning" in output
