@@ -15,6 +15,7 @@ pip install -e ".[dev]"
 ```bash
 b2b-simulator run-example sales-lead-qualification --cases 300 --seed 7
 b2b-simulator run-example invoice-processing --cases 300 --seed 7
+b2b-simulator run-example customer-support-ticket-resolution --cases 300 --seed 7
 ```
 
 Each command runs the "before" and "after" variants of the named example
@@ -49,6 +50,59 @@ b2b-simulator export-example invoice-processing --format csv --output-dir export
 `--format json` writes event logs, KPI summaries, and the before/after
 comparison as JSON files. `--format csv` writes a single comparison CSV
 with one row per headline metric, convenient for spreadsheets.
+
+## Evaluate several workflows as a portfolio
+
+```bash
+b2b-simulator run-portfolio sales-lead-qualification invoice-processing customer-support-ticket-resolution --cases 300
+b2b-simulator compare-portfolio sales-lead-qualification invoice-processing --implementation-cost 5000 --rank-by roi_percentage
+```
+
+`run-portfolio` prints a condensed before/after cost and ROI summary for
+each named example. `compare-portfolio` prints a full report: an
+executive summary, a workflow ranking (by total cost savings, ROI
+percentage, or per-case savings via `--rank-by`), aggregate ROI and
+payback, consolidated risks, and a recommended rollout order. Add
+`--html-output report.html` to also write a shareable HTML version. See
+`docs/portfolio_analysis.md`.
+
+## Find the break-even point for an assumption
+
+```bash
+b2b-simulator sensitivity-example invoice-processing --parameter ai_cost_per_execution --values 0,5,10,20,40
+```
+
+This re-simulates the named example once per value, holding everything
+else fixed, and prints a table of cost savings and ROI at each value
+plus the range where the redesign's cost savings cross from positive to
+negative. Supported `--parameter` values: `ai_error_rate`,
+`ai_cost_per_execution`, `human_hourly_cost`, `arrival_interval`, and
+`implementation_cost`. See `docs/sensitivity_analysis.md`.
+
+## Save and load workflow definitions as JSON
+
+```bash
+b2b-simulator save-example invoice-processing --output-dir workflows
+b2b-simulator load-example workflows/invoice-processing-after.json --cases 200
+```
+
+`save-example` writes the before/after `Workflow` definitions for a
+bundled example as JSON. `load-example` reads any workflow JSON file
+(validating its structure first) and prints a simulated KPI summary.
+Every bundled example also ships a ready-made JSON definition under
+`src/b2b_workflow_simulator/examples/data/`. See `docs/json_workflows.md`.
+
+## Generate a shareable HTML report
+
+```bash
+b2b-simulator html-report-example invoice-processing --implementation-cost 8000 --output report.html
+```
+
+Writes a single, self-contained HTML file (inline CSS, no external
+assets or frontend framework) with the same KPI table, bottlenecks,
+utilization, risks, and recommendation as `compare-example`'s
+plain-text report, suitable for emailing to a stakeholder who won't run
+the CLI.
 
 ## Define your own workflow
 
