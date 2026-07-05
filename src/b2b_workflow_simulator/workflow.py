@@ -40,11 +40,16 @@ class Workflow:
         return self
 
     def add_node(self, node: Node) -> Workflow:
-        """Register a node, validating that its actor is already known."""
+        """Register a node, validating that its actor(s) are already known."""
         if node.actor_id not in self._actors:
             raise ValueError(
                 f"node '{node.node_id}' references unknown actor '{node.actor_id}'"
             )
+        for actor_id in node.additional_actor_ids:
+            if actor_id not in self._actors:
+                raise ValueError(
+                    f"node '{node.node_id}' references unknown actor '{actor_id}'"
+                )
         self._nodes[node.node_id] = node
         return self
 
