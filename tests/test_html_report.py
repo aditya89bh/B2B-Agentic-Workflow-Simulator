@@ -1,6 +1,8 @@
 from b2b_workflow_simulator.capacity_planning import analyze_capacity, simulate_hiring
+from b2b_workflow_simulator.compliance import GDPRApprovalRequirement, evaluate_compliance
 from b2b_workflow_simulator.html_report import (
     render_capacity_html,
+    render_compliance_html,
     render_diff_html,
     render_hiring_html,
     render_monte_carlo_comparison_html,
@@ -411,4 +413,42 @@ def test_render_policy_html_for_compliant_workflow():
     output = render_policy_html(evaluation)
 
     assert "Compliant" in output
+    assert "No violations to report" in output
+
+
+def test_render_compliance_html_is_well_formed_document():
+    workflow = build_policy_workflow()
+    requirement = GDPRApprovalRequirement(
+        name="gdpr", personal_data_node_id="intake", consent_node_ids=("nowhere",)
+    )
+    report = evaluate_compliance(workflow, [requirement])
+
+    output = render_compliance_html(report)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_compliance_html_includes_score_and_violations():
+    workflow = build_policy_workflow()
+    requirement = GDPRApprovalRequirement(
+        name="gdpr", personal_data_node_id="intake", consent_node_ids=("nowhere",)
+    )
+    report = evaluate_compliance(workflow, [requirement])
+
+    output = render_compliance_html(report)
+
+    assert "Compliance score: 0.0%" in output
+    assert "gdpr_approval" in output
+
+
+def test_render_compliance_html_for_fully_compliant_workflow():
+    workflow = build_policy_workflow()
+    report = evaluate_compliance(workflow, [])
+
+    output = render_compliance_html(report)
+
+    assert "Compliance score: 100.0%" in output
     assert "No violations to report" in output
