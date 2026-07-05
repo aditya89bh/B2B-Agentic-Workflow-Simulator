@@ -12,7 +12,7 @@ from b2b_workflow_simulator.examples import (
     sales_lead_qualification,
 )
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
-from b2b_workflow_simulator.html_report import render_portfolio_html
+from b2b_workflow_simulator.html_report import render_diff_html, render_portfolio_html
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
 from b2b_workflow_simulator.redesign import compare_workflows
@@ -227,6 +227,26 @@ def compare_example(
 
     diff = compare_workflows(before_result.kpi, after_result.kpi, implementation_cost)
     print(generate_report(diff))
+    return 0
+
+
+def html_report_example(
+    example_name: str,
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+    output_path: str,
+) -> int:
+    """Run both variants of a bundled example and write a static HTML redesign report."""
+    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes)
+    if outcome is None:
+        return 1
+    _before_workflow, _after_workflow, before_result, after_result = outcome
+
+    diff = compare_workflows(before_result.kpi, after_result.kpi, implementation_cost)
+    Path(output_path).write_text(render_diff_html(diff))
+    print(f"HTML report written to {output_path}")
     return 0
 
 
@@ -569,6 +589,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minutes between case arrivals; enables capacity-aware queueing.",
     )
 
+    html_report_parser = subparsers.add_parser(
+        "html-report-example",
+        help="Run a bundled example and write a static HTML redesign report.",
+    )
+    html_report_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to run.",
+    )
+    html_report_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per variant (default: 200).",
+    )
+    html_report_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    html_report_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time cost of implementing the redesign, for payback analysis.",
+    )
+    html_report_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    html_report_parser.add_argument(
+        "--output",
+        default="report.html",
+        help="Path to write the HTML report to (default: ./report.html).",
+    )
+
     save_parser = subparsers.add_parser(
         "save-example",
         help="Save a bundled example's before/after workflow definitions as JSON.",
@@ -645,6 +704,16 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             args.implementation_cost,
             args.arrival_interval,
+        )
+
+    if args.command == "html-report-example":
+        return html_report_example(
+            args.name,
+            args.cases,
+            args.seed,
+            args.implementation_cost,
+            args.arrival_interval,
+            args.output,
         )
 
     if args.command == "save-example":
