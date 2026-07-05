@@ -200,6 +200,38 @@ class PoolScheduler:
             used_overtime=used_overtime,
         )
 
+    def peek_earliest_start(
+        self, pool: ActorPool, ready_time: float, sampled_base_duration: float
+    ) -> float:
+        """Return the earliest start time any worker in `pool` could offer.
+
+        Does not reserve any worker's time. Used by multi-resource task
+        scheduling to estimate when a pool could join a synchronized
+        start alongside other required actors, before committing to an
+        actual worker via `schedule`.
+        """
+        candidates = [worker for worker in pool.workers if worker.available]
+        if not candidates:
+            raise ValueError(f"pool '{pool.actor_id}' has no available workers")
+
+        best_start: float | None = None
+        for worker in candidates:
+            state = self._states.get((pool.actor_id, worker.worker_id), _WorkerState())
+            duration = sampled_base_duration * worker.speed_multiplier
+            start, _day_index, _used_overtime = _earliest_slot(
+                worker,
+                state.current_day_index,
+                state.minutes_used_today,
+                state.free_at,
+                ready_time,
+                duration,
+                pool.available_hours_per_day,
+            )
+            if best_start is None or start < best_start:
+                best_start = start
+        assert best_start is not None
+        return best_start
+
     def worker_busy_minutes(self, pool_id: str, worker_id: str) -> float:
         state = self._states.get((pool_id, worker_id))
         return state.total_busy_minutes if state else 0.0
