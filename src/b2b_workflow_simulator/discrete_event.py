@@ -40,16 +40,17 @@ from typing import Any
 from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.capacity import ActorScheduler
 from b2b_workflow_simulator.kpi import KPIResult
-from b2b_workflow_simulator.pool import ActorPool, PoolScheduler
+from b2b_workflow_simulator.pool import PoolScheduler
 from b2b_workflow_simulator.primitives.event import Event, EventType
 from b2b_workflow_simulator.simulation import (
     SimulationResult,
     choose_next_node,
     record_actor_utilization,
+    record_multi_resource_totals,
     record_pool_utilization,
     record_task_totals,
     resolve_arrival_times,
-    schedule_task_execution,
+    resolve_task_schedule,
 )
 from b2b_workflow_simulator.workflow import Workflow
 
@@ -197,14 +198,15 @@ class DiscreteEventEngine:
         node = workflow.get_node(node_id)
         actor = workflow.get_actor(node.actor_id)
         sampled_base = node.duration_model.sample(self._rng, node.base_duration_minutes)
-        tracks_capacity = scheduler is not None or isinstance(actor, ActorPool)
 
-        scheduled = schedule_task_execution(
-            actor, sampled_base, ready_time, scheduler, pool_scheduler
+        scheduled, tracks_capacity, details = resolve_task_schedule(
+            workflow, node, sampled_base, ready_time, scheduler, pool_scheduler
         )
         start, end, wait = scheduled.start, scheduled.end, scheduled.wait_minutes
         duration, cost = scheduled.duration, scheduled.cost
-        details = {"worker_id": scheduled.worker_id} if scheduled.worker_id else {}
+
+        if node.is_multi_resource:
+            record_multi_resource_totals(kpi, node.node_id, scheduled.coordination_delay_minutes)
 
         if tracks_capacity:
             kpi.total_wait_minutes += wait
