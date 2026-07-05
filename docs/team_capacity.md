@@ -116,6 +116,53 @@ raises a clear `ValueError` if every worker in a pool is unavailable at
 once, since that represents a genuinely unstaffed team rather than a
 routing decision.
 
+## Multi-resource tasks
+
+Everything above still schedules one actor (or one pool) per task. Some
+real tasks need more than one resource *at the same time*: a contract
+needs a Manager and Legal to sign off together, an AI agent's draft needs
+a Human Reviewer before it ships, a large payment needs Finance and
+Procurement in the same review. `Node.additional_actor_ids` models exactly
+this -- a tuple of extra actor (or pool) IDs that must all be
+simultaneously available alongside the node's primary `actor_id`:
+
+```python
+workflow.add_actor(HumanActor(actor_id="manager", name="Manager", hourly_cost=60.0))
+workflow.add_actor(HumanActor(actor_id="legal", name="Legal Counsel", hourly_cost=90.0))
+workflow.add_node(
+    Node(
+        "contract_signoff",
+        "Contract Sign-off",
+        actor_id="manager",
+        additional_actor_ids=("legal",),
+        base_duration_minutes=30,
+    )
+)
+```
+
+`Node.is_multi_resource` is `True` whenever `additional_actor_ids` is
+non-empty; `Node.required_actor_ids` returns every required actor ID,
+primary first. Both simulation engines detect this and delegate to
+`multi_resource.schedule_multi_resource_execution()` instead of the
+single-actor/single-pool path, which finds the latest of every
+participant's earliest availability (so no participant is double-booked),
+reserves that joint start time on every participant's calendar, and sums
+their individual costs. The primary actor (`actor_id`) determines the
+task's visible duration, error rate, and escalation behavior, matching the
+semantics of a single-actor node exactly when `additional_actor_ids` is
+empty -- existing workflows are completely unaffected.
+
+The extra wait this synchronization introduces beyond what the fastest
+available participant would have experienced alone is tracked as
+coordination delay: `KPIResult.total_coordination_delay_minutes` (summed
+across every case), `KPIResult.node_coordination_delay_minutes` (broken
+down by node, for identifying the most expensive steps to synchronize),
+and `KPIResult.multi_resource_task_count` (how many task executions needed
+more than one actor). A node with heavy coordination delay is a concrete,
+quantified case for co-locating the two roles' calendars, adding an
+on-call rotation, or reconsidering whether the sign-off genuinely needs
+both participants present at once.
+
 ## What this model does not do
 
 - It does not model cross-training or skill differences beyond
@@ -125,6 +172,10 @@ routing decision.
   worker belongs to exactly the one `ActorPool` they were added to).
 - Shift definitions are static for the whole simulated period; there is
   no support for a worker's schedule changing partway through a run.
+- Multi-resource tasks do not model partial participation or a
+  participant leaving early -- every required actor is reserved for the
+  full primary-actor duration, and a task cannot proceed with fewer than
+  all of its required participants.
 
 These are reasonable areas for a future phase once multi-team,
 multi-skill routing has a concrete business example driving its design.
