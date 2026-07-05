@@ -5,6 +5,8 @@ from b2b_workflow_simulator.monte_carlo import (
     KPI_METRICS,
     MetricStats,
     compute_metric_stats,
+    generate_monte_carlo_comparison_report,
+    generate_monte_carlo_report,
     run_monte_carlo,
     run_monte_carlo_comparison,
 )
@@ -143,3 +145,35 @@ class TestRunMonteCarloComparison:
             build_before, build_after, 20, [1, 2, 3], implementation_cost=50.0
         )
         assert result.metric_stats["payback_in_cases"].sample_count == 3
+
+
+class TestGenerateMonteCarloReport:
+    def test_includes_workflow_name_and_run_count(self):
+        result = run_monte_carlo(build_before, 20, [1, 2, 3, 4, 5])
+        report = generate_monte_carlo_report(result)
+        assert "Test Before" in report
+        assert "5" in report
+        assert "EXECUTIVE SUMMARY" in report
+        assert "METRIC DISTRIBUTION" in report
+
+    def test_reports_all_metric_labels(self):
+        result = run_monte_carlo(build_before, 20, [1, 2, 3])
+        report = generate_monte_carlo_report(result)
+        assert "Completion rate" in report
+        assert "Cost per case" in report
+
+
+class TestGenerateMonteCarloComparisonReport:
+    def test_includes_before_and_after_names(self):
+        result = run_monte_carlo_comparison(
+            build_before, build_after, 20, [1, 2, 3], implementation_cost=50.0
+        )
+        report = generate_monte_carlo_comparison_report(result)
+        assert "Test Before" in report
+        assert "Test After" in report
+        assert "Payback" in report
+
+    def test_handles_missing_payback_gracefully(self):
+        result = run_monte_carlo_comparison(build_before, build_after, 20, [1, 2, 3])
+        report = generate_monte_carlo_comparison_report(result)
+        assert "n/a" in report
