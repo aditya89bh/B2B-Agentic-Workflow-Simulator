@@ -314,6 +314,101 @@ def simulate_hiring(
     )
 
 
+def _build_plan_summary(plan: CapacityPlan) -> list[str]:
+    total = len(plan.recommendations)
+    if total == 0:
+        return ["No capacity-aware utilization data was recorded for this run."]
+    lines = [
+        f"{total} resource(s) evaluated against a {plan.target_utilization:.0%} "
+        "target utilization.",
+        f"{len(plan.overloaded)} overloaded, {len(plan.underutilized)} underutilized, "
+        f"{len(plan.balanced)} balanced.",
+    ]
+    net_delta = sum(rec.headcount_delta for rec in plan.recommendations)
+    if net_delta > 0:
+        lines.append(f"Net recommended headcount change: +{net_delta} worker(s).")
+    elif net_delta < 0:
+        lines.append(f"Net recommended headcount change: {net_delta} worker(s).")
+    else:
+        lines.append("Net recommended headcount change: none.")
+    return lines
+
+
+def _build_recommendation_table(plan: CapacityPlan) -> list[str]:
+    if not plan.recommendations:
+        return []
+    header = (
+        f"{'Resource':<18}{'Kind':<8}{'Utilization':>13}{'Status':>14}"
+        f"{'Current':>10}{'Recommended':>13}"
+    )
+    lines = [header, "-" * len(header)]
+    for rec in plan.recommendations:
+        lines.append(
+            f"{rec.resource_id:<18}{rec.resource_kind:<8}{rec.current_utilization:>13.1%}"
+            f"{rec.status:>14}{rec.current_headcount:>10}{rec.recommended_headcount:>13}"
+        )
+    return lines
+
+
+def generate_capacity_report(plan: CapacityPlan) -> str:
+    """Render a `CapacityPlan` as a plain-text staffing report."""
+    sections = [
+        "=" * 60,
+        "CAPACITY PLANNING ANALYSIS",
+        "=" * 60,
+        "",
+        f"Workflow: {plan.workflow_name}",
+        "",
+        "SUMMARY",
+        "-" * 60,
+        *_build_plan_summary(plan),
+        "",
+        "STAFFING RECOMMENDATIONS",
+        "-" * 60,
+        *_build_recommendation_table(plan),
+        "",
+        "DETAILS",
+        "-" * 60,
+        *[f"  - {rec.rationale}" for rec in plan.recommendations],
+    ]
+    return "\n".join(sections)
+
+
+def generate_hiring_report(result: HiringSimulationResult) -> str:
+    """Render a `HiringSimulationResult` as a plain-text before/after summary."""
+    utilization_direction = "decreases" if result.utilization_change <= 0 else "increases"
+    queue_direction = "decreases" if result.queue_depth_change <= 0 else "increases"
+    wait_direction = "decreases" if result.wait_time_change_minutes <= 0 else "increases"
+    sections = [
+        "=" * 60,
+        "HIRING SIMULATION",
+        "=" * 60,
+        "",
+        f"Workflow: {result.workflow_name}",
+        f"Pool: {result.pool_id}",
+        (
+            f"Proposed headcount: {result.baseline_worker_count} -> "
+            f"{result.proposed_worker_count}"
+        ),
+        "",
+        "IMPACT",
+        "-" * 60,
+        (
+            f"Utilization {utilization_direction} from {result.baseline_utilization:.1%} to "
+            f"{result.proposed_utilization:.1%}."
+        ),
+        (
+            f"Max queue depth {queue_direction} from {result.baseline_max_queue_depth} to "
+            f"{result.proposed_max_queue_depth}."
+        ),
+        (
+            f"Average wait time {wait_direction} from {result.baseline_avg_wait_minutes:,.1f} "
+            f"to {result.proposed_avg_wait_minutes:,.1f} minutes."
+        ),
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "DEFAULT_TARGET_UTILIZATION",
     "DEFAULT_OVERLOAD_THRESHOLD",
@@ -326,4 +421,6 @@ __all__ = [
     "analyze_capacity",
     "HiringSimulationResult",
     "simulate_hiring",
+    "generate_capacity_report",
+    "generate_hiring_report",
 ]
