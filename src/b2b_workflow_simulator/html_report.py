@@ -32,6 +32,7 @@ from b2b_workflow_simulator.monte_carlo import (
 )
 from b2b_workflow_simulator.policy import SEVERITY_ERROR, PolicyEvaluation
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
+from b2b_workflow_simulator.recommendation import RecommendationSet
 from b2b_workflow_simulator.redesign import MetricDelta, RedesignDiff
 from b2b_workflow_simulator.report import (
     build_recommendation,
@@ -619,6 +620,35 @@ def render_risk_html(assessment: RiskAssessment) -> str:
     return _page(f"{assessment.workflow_name} - Risk Assessment", body)
 
 
+def render_recommendation_html(recommendation_set: RecommendationSet) -> str:
+    """Render a `RecommendationSet` as a standalone HTML report."""
+    if not recommendation_set.recommendations:
+        cards = "<p>No actionable recommendations at this time.</p>"
+    else:
+        cards = "".join(
+            f"""
+  <div class="callout">
+    <p><strong>{index}. {_escape(rec.title)}</strong>
+    &mdash; {_escape(rec.confidence)} confidence</p>
+    <p>{_escape(rec.reasoning)}</p>
+    <ul>
+      <li>Affected KPIs: {_escape(", ".join(rec.affected_kpis))}</li>
+      <li>Expected benefit: {_escape(rec.expected_benefit)}</li>
+    </ul>
+  </div>
+"""
+            for index, rec in enumerate(recommendation_set.recommendations, start=1)
+        )
+
+    body = f"""
+  <h1>Recommendations</h1>
+  <p class="subtitle">{_escape(recommendation_set.workflow_name)} &mdash;
+  {len(recommendation_set)} recommendation(s)</p>
+  {cards}
+"""
+    return _page(f"{recommendation_set.workflow_name} - Recommendations", body)
+
+
 __all__ = [
     "render_diff_html",
     "render_portfolio_html",
@@ -631,4 +661,5 @@ __all__ = [
     "render_compliance_html",
     "render_sla_html",
     "render_risk_html",
+    "render_recommendation_html",
 ]
