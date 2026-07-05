@@ -5,11 +5,13 @@ from b2b_workflow_simulator.html_report import (
     render_hiring_html,
     render_monte_carlo_comparison_html,
     render_monte_carlo_html,
+    render_policy_html,
     render_portfolio_html,
     render_sensitivity_grid_html,
 )
 from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.monte_carlo import run_monte_carlo, run_monte_carlo_comparison
+from b2b_workflow_simulator.policy import SeparationOfDutiesPolicy, evaluate_policies
 from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
@@ -369,3 +371,44 @@ def test_render_hiring_html_includes_headcount_change():
     assert "1" in output
     assert "2" in output
     assert "Impact" in output
+
+
+def build_policy_workflow() -> Workflow:
+    workflow = Workflow(workflow_id="wf", name="Invoice <script>", entry_node_id="intake")
+    workflow.add_actor(HumanActor(actor_id="clerk", name="Clerk"))
+    workflow.add_node(Node(node_id="intake", name="Intake", actor_id="clerk", is_terminal=True))
+    return workflow
+
+
+def test_render_policy_html_is_well_formed_document():
+    workflow = build_policy_workflow()
+    policy = SeparationOfDutiesPolicy(name="sod", node_id_a="intake", node_id_b="intake")
+    evaluation = evaluate_policies(workflow, [policy])
+
+    output = render_policy_html(evaluation)
+
+    assert output.startswith("<!DOCTYPE html>")
+    assert "</html>" in output
+    assert "<script>" not in output.split("<style>")[1]
+    assert "&lt;script&gt;" in output
+
+
+def test_render_policy_html_includes_violations_table():
+    workflow = build_policy_workflow()
+    policy = SeparationOfDutiesPolicy(name="sod", node_id_a="intake", node_id_b="intake")
+    evaluation = evaluate_policies(workflow, [policy])
+
+    output = render_policy_html(evaluation)
+
+    assert "Violations found" in output
+    assert "separation_of_duties" in output
+
+
+def test_render_policy_html_for_compliant_workflow():
+    workflow = build_policy_workflow()
+    evaluation = evaluate_policies(workflow, [])
+
+    output = render_policy_html(evaluation)
+
+    assert "Compliant" in output
+    assert "No violations to report" in output
