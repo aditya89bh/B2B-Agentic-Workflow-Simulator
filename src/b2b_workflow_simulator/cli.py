@@ -22,7 +22,7 @@ from b2b_workflow_simulator.sensitivity import (
     format_sensitivity_table,
     run_sensitivity_sweep,
 )
-from b2b_workflow_simulator.simulation import SimulationRunner
+from b2b_workflow_simulator.simulation import ENGINES, SimulationRunner
 from b2b_workflow_simulator.workflow_io import load_workflow, save_workflow
 
 EXPORT_FORMATS = ("json", "csv")
@@ -80,6 +80,7 @@ def _run_before_after(
     num_cases: int,
     seed: int | None,
     arrival_interval_minutes: float | None = None,
+    engine: str = "simple",
 ):
     """Build and simulate both variants of a bundled example.
 
@@ -96,10 +97,10 @@ def _run_before_after(
     after_workflow = build_after()
 
     before_result = SimulationRunner(seed=seed).run(
-        before_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+        before_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes, engine=engine
     )
     after_result = SimulationRunner(seed=seed).run(
-        after_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+        after_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes, engine=engine
     )
     return before_workflow, after_workflow, before_result, after_result
 
@@ -171,15 +172,16 @@ def run_portfolio(
     return 0
 
 
-def run_example(example_name: str, num_cases: int, seed: int | None) -> int:
+def run_example(example_name: str, num_cases: int, seed: int | None, engine: str = "simple") -> int:
     """Run the before/after variants of a bundled example and print a KPI comparison."""
-    outcome = _run_before_after(example_name, num_cases, seed)
+    outcome = _run_before_after(example_name, num_cases, seed, engine=engine)
     if outcome is None:
         return 1
     before_workflow, after_workflow, before_result, after_result = outcome
 
     print(f"Example: {example_name}")
     print(f"Cases per variant: {num_cases}")
+    print(f"Engine: {engine}")
     print()
     print(f"Before: {before_workflow.name}")
     print(f"After:  {after_workflow.name}")
@@ -218,9 +220,10 @@ def compare_example(
     seed: int | None,
     implementation_cost: float | None,
     arrival_interval_minutes: float | None,
+    engine: str = "simple",
 ) -> int:
     """Run both variants of a bundled example and print a full ROI report."""
-    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes)
+    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes, engine)
     if outcome is None:
         return 1
     _before_workflow, _after_workflow, before_result, after_result = outcome
@@ -400,6 +403,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=42,
         help="Random seed for reproducible results (default: 42).",
     )
+    run_parser.add_argument(
+        "--engine",
+        choices=ENGINES,
+        default="simple",
+        help="Simulation engine: 'simple' (default) or 'discrete'.",
+    )
 
     portfolio_parser = subparsers.add_parser(
         "run-portfolio",
@@ -456,6 +465,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    compare_parser.add_argument(
+        "--engine",
+        choices=ENGINES,
+        default="simple",
+        help="Simulation engine: 'simple' (default) or 'discrete'.",
     )
 
     compare_portfolio_parser = subparsers.add_parser(
@@ -669,7 +684,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "run-example":
-        return run_example(args.name, args.cases, args.seed)
+        return run_example(args.name, args.cases, args.seed, args.engine)
 
     if args.command == "run-portfolio":
         return run_portfolio(args.names, args.cases, args.seed)
@@ -687,7 +702,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "compare-example":
         return compare_example(
-            args.name, args.cases, args.seed, args.implementation_cost, args.arrival_interval
+            args.name,
+            args.cases,
+            args.seed,
+            args.implementation_cost,
+            args.arrival_interval,
+            args.engine,
         )
 
     if args.command == "sensitivity-example":
