@@ -41,19 +41,24 @@ def _status(
     return BALANCED
 
 
-def _recommended_headcount(current: int, utilization: float, target_utilization: float) -> int:
+def _recommended_headcount(
+    current: int, utilization: float, target_utilization: float, status: str
+) -> int:
     """Headcount that would bring `utilization` to `target_utilization`, given `current`.
 
-    Rounds up when adding capacity (never under-provisions an overloaded
-    resource) and rounds down when reducing it (never over-cuts an
-    underutilized one), always keeping at least one worker.
+    Only `OVERLOADED` and `UNDERUTILIZED` resources get a headcount change
+    recommendation; `BALANCED` resources always recommend no change, even
+    if their utilization is not exactly at the target. Rounds up when
+    adding capacity (never under-provisions an overloaded resource) and
+    rounds down when reducing it (never over-cuts an underutilized one),
+    always keeping at least one worker.
     """
-    if target_utilization <= 0 or current <= 0:
+    if status == BALANCED or target_utilization <= 0 or current <= 0:
         return max(1, current)
     ideal = current * utilization / target_utilization
-    if utilization > target_utilization:
+    if status == OVERLOADED:
         return max(current, math.ceil(ideal))
-    return max(1, math.floor(ideal))
+    return max(1, min(current, math.floor(ideal)))
 
 
 @dataclass(frozen=True)
@@ -169,8 +174,8 @@ def analyze_capacity(
 
     for actor_id, utilization in kpi.actor_utilization.items():
         current = 1
-        recommended = _recommended_headcount(current, utilization, target_utilization)
         status = _status(utilization, overload_threshold, underutilization_threshold)
+        recommended = _recommended_headcount(current, utilization, target_utilization, status)
         recommendations.append(
             StaffingRecommendation(
                 resource_id=actor_id,
@@ -187,8 +192,8 @@ def analyze_capacity(
 
     for pool_id, utilization in kpi.pool_utilization.items():
         current = pool_sizes.get(pool_id) or len(kpi.worker_utilization.get(pool_id, {})) or 1
-        recommended = _recommended_headcount(current, utilization, target_utilization)
         status = _status(utilization, overload_threshold, underutilization_threshold)
+        recommended = _recommended_headcount(current, utilization, target_utilization, status)
         recommendations.append(
             StaffingRecommendation(
                 resource_id=pool_id,
