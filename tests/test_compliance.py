@@ -7,6 +7,7 @@ from b2b_workflow_simulator.compliance import (
     RegulatoryCheckpointRequirement,
     SegregationOfDutiesRequirement,
     evaluate_compliance,
+    generate_compliance_report,
 )
 from b2b_workflow_simulator.primitives.edge import Edge
 from b2b_workflow_simulator.primitives.human import HumanActor
@@ -205,3 +206,41 @@ def test_evaluate_compliance_with_no_requirements_is_fully_compliant():
     assert report.is_compliant
     assert report.compliance_score == 100.0
     assert report.requirements_checked == 0
+
+
+def test_generate_compliance_report_includes_score_and_violations():
+    workflow = build_workflow()
+    requirement = GDPRApprovalRequirement(
+        name="gdpr-consent",
+        personal_data_node_id="process_data",
+        consent_node_ids=("finance_approval",),
+    )
+
+    report_text = generate_compliance_report(evaluate_compliance(workflow, [requirement]))
+
+    assert "COMPLIANCE ANALYSIS" in report_text
+    assert "Compliance score: 0.0%" in report_text
+    assert "gdpr_approval" in report_text
+
+
+def test_generate_compliance_report_for_fully_compliant_workflow():
+    workflow = build_workflow()
+    requirement = SegregationOfDutiesRequirement(
+        name="sod", node_id_a="manager_approval", node_id_b="finance_approval"
+    )
+
+    report_text = generate_compliance_report(evaluate_compliance(workflow, [requirement]))
+
+    assert "Compliance score: 100.0%" in report_text
+    assert "satisfies every attached compliance requirement" in report_text
+
+
+def test_generate_compliance_report_lists_audit_findings():
+    workflow = build_workflow()
+    requirement = RegulatoryCheckpointRequirement(
+        name="checkpoint", node_id="finance_approval", regulation_reference="SOX 404"
+    )
+
+    report_text = generate_compliance_report(evaluate_compliance(workflow, [requirement]))
+
+    assert "SOX 404" in report_text
