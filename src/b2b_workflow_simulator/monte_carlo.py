@@ -256,6 +256,171 @@ def run_monte_carlo_comparison(
     )
 
 
+_PERCENT_METRICS = {"completion_rate", "completion_rate_before", "completion_rate_after"}
+_CURRENCY_METRICS = {
+    "total_cost",
+    "avg_cost_per_case",
+    "cost_per_case_before",
+    "cost_per_case_after",
+    "total_cost_savings",
+    "cost_savings_per_case",
+}
+_METRIC_LABELS = {
+    "completion_rate": "Completion rate",
+    "avg_cycle_time_minutes": "Cycle time (minutes)",
+    "avg_wait_time_minutes": "Wait time (minutes)",
+    "total_cost": "Total cost",
+    "avg_cost_per_case": "Cost per case",
+    "completion_rate_before": "Completion rate (before)",
+    "completion_rate_after": "Completion rate (after)",
+    "cycle_time_minutes_before": "Cycle time, minutes (before)",
+    "cycle_time_minutes_after": "Cycle time, minutes (after)",
+    "wait_time_minutes_before": "Wait time, minutes (before)",
+    "wait_time_minutes_after": "Wait time, minutes (after)",
+    "cost_per_case_before": "Cost per case (before)",
+    "cost_per_case_after": "Cost per case (after)",
+    "total_cost_savings": "Total cost savings",
+    "roi_percentage": "ROI %",
+    "cost_savings_per_case": "Cost savings per case",
+    "payback_in_cases": "Payback (cases)",
+}
+
+
+def _format_metric_value(metric: str, value: float) -> str:
+    if metric in _PERCENT_METRICS:
+        return f"{value:.1%}"
+    if metric in _CURRENCY_METRICS:
+        return f"${value:,.2f}"
+    if metric == "roi_percentage":
+        return f"{value:+.1f}%"
+    return f"{value:,.1f}"
+
+
+def _build_stats_table(metric_stats: dict[str, MetricStats], metrics: Sequence[str]) -> list[str]:
+    header = (
+        f"{'Metric':<30}{'Mean':>14}{'Min':>14}{'Max':>14}{'Median':>14}{'P10':>14}{'P90':>14}"
+    )
+    lines = [header, "-" * len(header)]
+    for metric in metrics:
+        stats = metric_stats.get(metric)
+        if stats is None or stats.sample_count == 0:
+            lines.append(f"{_METRIC_LABELS.get(metric, metric):<30}{'n/a':>14}")
+            continue
+        label = _METRIC_LABELS.get(metric, metric)
+        lines.append(
+            f"{label:<30}"
+            f"{_format_metric_value(metric, stats.mean):>14}"
+            f"{_format_metric_value(metric, stats.minimum):>14}"
+            f"{_format_metric_value(metric, stats.maximum):>14}"
+            f"{_format_metric_value(metric, stats.median):>14}"
+            f"{_format_metric_value(metric, stats.p10):>14}"
+            f"{_format_metric_value(metric, stats.p90):>14}"
+        )
+    return lines
+
+
+def _build_variability_summary(result: MonteCarloResult) -> list[str]:
+    lines = [
+        f"'{result.workflow_name}' was simulated {result.num_runs} times across "
+        "independent random seeds to characterize outcome variability."
+    ]
+    completion = result.metric_stats.get("completion_rate")
+    cost = result.metric_stats.get("avg_cost_per_case")
+    if completion is not None and completion.sample_count > 0:
+        lines.append(
+            f"Completion rate ranges from {completion.minimum:.1%} to {completion.maximum:.1%} "
+            f"(mean {completion.mean:.1%}), with 80% of runs falling between "
+            f"{completion.p10:.1%} and {completion.p90:.1%}."
+        )
+    if cost is not None and cost.sample_count > 0:
+        relative_spread = cost.spread / cost.mean if cost.mean else 0.0
+        volatility = (
+            "highly variable"
+            if relative_spread > 0.3
+            else "moderately variable"
+            if relative_spread > 0.1
+            else "stable"
+        )
+        lines.append(
+            f"Cost per case is {volatility} across runs (P10 ${cost.p10:,.2f}, "
+            f"P90 ${cost.p90:,.2f}, mean ${cost.mean:,.2f})."
+        )
+    return lines
+
+
+def generate_monte_carlo_report(result: MonteCarloResult) -> str:
+    """Render a `MonteCarloResult` as a plain-text executive summary and stats table."""
+    sections = [
+        "=" * 60,
+        "MONTE CARLO SIMULATION ANALYSIS",
+        "=" * 60,
+        "",
+        "EXECUTIVE SUMMARY",
+        "-" * 60,
+        *_build_variability_summary(result),
+        "",
+        "METRIC DISTRIBUTION",
+        "-" * 60,
+        *_build_stats_table(result.metric_stats, KPI_METRICS),
+    ]
+    return "\n".join(sections)
+
+
+def _build_comparison_variability_summary(result: MonteCarloComparisonResult) -> list[str]:
+    lines = [
+        f"'{result.before_name}' vs '{result.after_name}' was simulated {result.num_runs} "
+        "times across independent random seeds to characterize how reliably the redesign "
+        "outperforms the current process.",
+    ]
+    savings = result.metric_stats.get("total_cost_savings")
+    if savings is not None and savings.sample_count > 0:
+        if savings.minimum > 0:
+            lines.append(
+                f"The redesign produced positive cost savings in every simulated run "
+                f"(ranging from ${savings.minimum:,.2f} to ${savings.maximum:,.2f}, mean "
+                f"${savings.mean:,.2f}), suggesting the improvement is robust to random "
+                "variation."
+            )
+        elif savings.maximum <= 0:
+            lines.append(
+                "The redesign did not produce positive cost savings in any simulated run "
+                "under these assumptions."
+            )
+        else:
+            lines.append(
+                f"Cost savings vary in sign across runs (from ${savings.minimum:,.2f} to "
+                f"${savings.maximum:,.2f}, mean ${savings.mean:,.2f}); the outcome is "
+                "sensitive to random variation and should be treated cautiously."
+            )
+    payback = result.metric_stats.get("payback_in_cases")
+    if payback is not None and payback.sample_count > 0:
+        coverage = payback.sample_count / result.num_runs
+        lines.append(
+            f"Payback was achievable in {coverage:.0%} of simulated runs, averaging "
+            f"{payback.mean:,.0f} cases to break even (P10 {payback.p10:,.0f}, "
+            f"P90 {payback.p90:,.0f})."
+        )
+    return lines
+
+
+def generate_monte_carlo_comparison_report(result: MonteCarloComparisonResult) -> str:
+    """Render a `MonteCarloComparisonResult` as a plain-text executive report."""
+    sections = [
+        "=" * 60,
+        "MONTE CARLO REDESIGN COMPARISON",
+        "=" * 60,
+        "",
+        "EXECUTIVE SUMMARY",
+        "-" * 60,
+        *_build_comparison_variability_summary(result),
+        "",
+        "METRIC DISTRIBUTION",
+        "-" * 60,
+        *_build_stats_table(result.metric_stats, COMPARISON_METRICS),
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "KPI_METRICS",
     "COMPARISON_METRICS",
@@ -265,4 +430,6 @@ __all__ = [
     "compute_metric_stats",
     "run_monte_carlo",
     "run_monte_carlo_comparison",
+    "generate_monte_carlo_report",
+    "generate_monte_carlo_comparison_report",
 ]
