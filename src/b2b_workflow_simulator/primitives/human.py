@@ -23,14 +23,11 @@ class HumanActor(Actor):
             30% slower than baseline; 0.8 means 20% faster.
         error_rate: Probability (0.0-1.0) that this actor's execution of a
             task fails and requires escalation or rework.
-        available_hours_per_day: Working capacity, used for throughput and
-            staffing analysis in later phases.
     """
 
     hourly_cost: float = 0.0
     speed_multiplier: float = 1.0
     error_rate: float = 0.0
-    available_hours_per_day: float = 8.0
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -40,8 +37,6 @@ class HumanActor(Actor):
             raise ValueError("speed_multiplier must be positive")
         if not 0.0 <= self.error_rate <= 1.0:
             raise ValueError("error_rate must be between 0.0 and 1.0")
-        if self.available_hours_per_day <= 0:
-            raise ValueError("available_hours_per_day must be positive")
 
     @property
     def kind(self) -> str:

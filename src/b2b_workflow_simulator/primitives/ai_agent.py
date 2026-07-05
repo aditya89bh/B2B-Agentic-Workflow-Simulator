@@ -33,6 +33,7 @@ class AIAgentActor(Actor):
             "autonomous", used for reporting only.
     """
 
+    available_hours_per_day: float = 24.0
     cost_per_execution: float = 0.0
     speed_multiplier: float = 0.2
     error_rate: float = 0.0
