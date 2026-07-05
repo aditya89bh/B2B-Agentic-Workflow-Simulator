@@ -102,16 +102,17 @@ capacity on that role, not just a faster process.
 
 ## What this model does not do
 
-- It does not run a fully general discrete-event simulation across
-  cases; cases are processed in arrival order rather than interleaved by
-  a global event queue. For the FIFO, single-queue-per-actor processes
-  this simulator targets, that distinction rarely changes the results,
-  but it means true multi-actor race conditions are not modeled.
 - It does not model partial-day carryover of a single task (a task
   either fits in the remaining daily capacity or is pushed to the next
   day in full).
-- It does not model shift schedules, holidays, or part-time actors --
-  `available_hours_per_day` is a flat daily figure.
+- A single `HumanActor`/`AIAgentActor` does not model shift schedules,
+  holidays, or part-time hours -- `available_hours_per_day` is a flat
+  daily figure. For shift-based scheduling, multiple interchangeable
+  workers, and overtime, see `docs/team_capacity.md`.
 
-These are reasonable areas for a future phase once the current model has
-been validated against more workflows.
+Two limitations from earlier phases have since been addressed:
+`docs/discrete_event_engine.md` adds an optional discrete-event engine
+(`engine="discrete"`) with a global, time-ordered event queue for
+workflows where true cross-case contention matters, and
+`docs/team_capacity.md` adds shift-aware, multi-worker team pools as an
+alternative to the single-actor model described above.
