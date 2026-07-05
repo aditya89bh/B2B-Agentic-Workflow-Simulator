@@ -243,6 +243,50 @@ def evaluate_sla(result: SimulationResult, slas: list[SLA]) -> SLAReport:
     )
 
 
+def _build_sla_summary(report: SLAReport) -> list[str]:
+    if report.rules_checked == 0:
+        return ["No SLA rules were attached to this workflow."]
+    lines = [
+        f"{report.rules_checked} SLA rule(s) checked across {report.cases_evaluated} case(s).",
+        f"Attainment rate: {report.attainment_rate:.1%} "
+        f"({report.evaluations} applicable check(s)).",
+        f"{report.breach_count} breach(es), averaging "
+        f"{report.average_breach_minutes:,.1f} minute(s) over deadline.",
+    ]
+    if report.total_penalty > 0:
+        lines.append(f"Estimated financial penalty: ${report.total_penalty:,.2f}.")
+    if report.breach_count == 0:
+        lines.append("Every applicable SLA check was met.")
+    return lines
+
+
+def _build_breach_cause_lines(report: SLAReport) -> list[str]:
+    causes = report.breach_causes()
+    if not causes:
+        return ["No breaches recorded."]
+    return [f"  - {name}: {count} breach(es)" for name, count in sorted(causes.items())]
+
+
+def generate_sla_report(report: SLAReport) -> str:
+    """Render an `SLAReport` as a plain-text service-level report."""
+    sections = [
+        "=" * 60,
+        "SLA PERFORMANCE ANALYSIS",
+        "=" * 60,
+        "",
+        f"Workflow: {report.workflow_name}",
+        "",
+        "SUMMARY",
+        "-" * 60,
+        *_build_sla_summary(report),
+        "",
+        "BREACH CAUSES",
+        "-" * 60,
+        *_build_breach_cause_lines(report),
+    ]
+    return "\n".join(sections)
+
+
 __all__ = [
     "CompletionSLA",
     "ResponseSLA",
@@ -251,4 +295,5 @@ __all__ = [
     "SLABreach",
     "SLAReport",
     "evaluate_sla",
+    "generate_sla_report",
 ]
