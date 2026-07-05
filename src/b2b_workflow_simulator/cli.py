@@ -13,6 +13,7 @@ from b2b_workflow_simulator.examples import (
 )
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.report import generate_report
 from b2b_workflow_simulator.simulation import SimulationRunner
@@ -94,6 +95,73 @@ def _run_before_after(
         after_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
     )
     return before_workflow, after_workflow, before_result, after_result
+
+
+def _build_portfolio(
+    example_names: list[str],
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+) -> WorkflowPortfolio | None:
+    """Build a `WorkflowPortfolio` from a list of bundled example names.
+
+    Returns `None` (after printing an error) if any name is unknown.
+    """
+    unknown = [name for name in example_names if name not in EXAMPLES]
+    if unknown:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example(s): {', '.join(unknown)}. Available: {available}", file=sys.stderr)
+        return None
+
+    portfolio = WorkflowPortfolio(name="Portfolio")
+    for name in example_names:
+        outcome = _run_before_after(name, num_cases, seed, arrival_interval_minutes)
+        if outcome is None:
+            return None
+        _before_workflow, _after_workflow, before_result, after_result = outcome
+        portfolio.add_entry(name, before_result.kpi, after_result.kpi, implementation_cost)
+    return portfolio
+
+
+def run_portfolio(
+    example_names: list[str],
+    num_cases: int,
+    seed: int | None,
+) -> int:
+    """Run several bundled examples and print a condensed per-workflow KPI summary."""
+    portfolio = _build_portfolio(example_names, num_cases, seed, None, None)
+    if portfolio is None:
+        return 1
+
+    print(f"Portfolio: {', '.join(example_names)}")
+    print(f"Cases per workflow: {num_cases}")
+    print()
+    rows = [
+        (
+            entry.name,
+            f"${entry.diff.total_cost.before:,.2f}",
+            f"${entry.diff.total_cost.after:,.2f}",
+            f"{entry.diff.roi.roi_percentage:+.1f}%"
+            if entry.diff.roi.roi_percentage is not None
+            else "n/a",
+        )
+        for entry in portfolio.entries
+    ]
+    label_width = max(len(row[0]) for row in rows)
+    col_width = max(max(len(row[1]), len(row[2]), len(row[3])) for row in rows)
+    header = (
+        f"{'Workflow':<{label_width}}  {'Before Cost':>{col_width}}  "
+        f"{'After Cost':>{col_width}}  {'ROI':>{col_width}}"
+    )
+    print(header)
+    print("-" * len(header))
+    for name, before_cost, after_cost, roi in rows:
+        print(
+            f"{name:<{label_width}}  {before_cost:>{col_width}}  "
+            f"{after_cost:>{col_width}}  {roi:>{col_width}}"
+        )
+    return 0
 
 
 def run_example(example_name: str, num_cases: int, seed: int | None) -> int:
@@ -197,6 +265,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Random seed for reproducible results (default: 42).",
     )
 
+    portfolio_parser = subparsers.add_parser(
+        "run-portfolio",
+        help="Run several bundled examples together and print a per-workflow KPI summary.",
+    )
+    portfolio_parser.add_argument(
+        "names",
+        nargs="+",
+        choices=sorted(EXAMPLES),
+        help="Names of the bundled examples to include in the portfolio.",
+    )
+    portfolio_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per variant (default: 200).",
+    )
+    portfolio_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+
     compare_parser = subparsers.add_parser(
         "compare-example",
         help="Run a bundled example and print a full before/after ROI report.",
@@ -285,6 +376,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run-example":
         return run_example(args.name, args.cases, args.seed)
+
+    if args.command == "run-portfolio":
+        return run_portfolio(args.names, args.cases, args.seed)
 
     if args.command == "compare-example":
         return compare_example(
