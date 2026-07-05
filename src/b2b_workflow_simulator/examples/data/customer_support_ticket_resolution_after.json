@@ -1,0 +1,241 @@
+{
+  "workflow_id": "customer-support-ticket-resolution-after",
+  "name": "Customer Support Ticket Resolution (After: AI-Augmented)",
+  "description": "Redesigned process where AI agents triage tickets and draft responses end to end, a human Support Reviewer approves complex or low-confidence cases, and a Specialist handles only genuine escalations.",
+  "entry_node_id": "ticket_intake",
+  "actors": [
+    {
+      "actor_id": "triage_agent",
+      "name": "Triage Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.08,
+      "speed_multiplier": 0.05,
+      "error_rate": 0.02,
+      "escalation_rate": 0.03,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "response_agent",
+      "name": "Response Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.15,
+      "speed_multiplier": 0.08,
+      "error_rate": 0.02,
+      "escalation_rate": 0.04,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "specialist",
+      "name": "Specialist",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 45.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.02
+    },
+    {
+      "actor_id": "support_reviewer",
+      "name": "Support Reviewer",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 30.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.02
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "ticket_intake",
+      "name": "Ticket Intake",
+      "actor_id": "triage_agent",
+      "description": "Automatically log the ticket and pull customer/account context.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "triage",
+      "name": "Triage",
+      "actor_id": "triage_agent",
+      "description": "Automatically classify the ticket type and priority.",
+      "base_duration_minutes": 8.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 5.0,
+        "maximum": 12.0,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "response_drafting",
+      "name": "Response Drafting",
+      "actor_id": "response_agent",
+      "description": "Automatically draft a resolution response for the customer.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 10.0,
+        "maximum": 22.0,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "escalation",
+      "name": "Escalation",
+      "actor_id": "specialist",
+      "description": "Investigate and resolve a complex or high-priority ticket.",
+      "base_duration_minutes": 25.0,
+      "duration_model": {
+        "kind": "triangular",
+        "minimum": 15.0,
+        "maximum": 60.0,
+        "mode": 25.0
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "follow_up",
+      "name": "Follow-Up",
+      "actor_id": "response_agent",
+      "description": "Automatically confirm the resolution with the customer and close it.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_wrong_classification",
+      "name": "Exception: Wrong Classification",
+      "actor_id": "support_reviewer",
+      "description": "Correct a ticket the triage agent routed to the wrong queue.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 5.0,
+        "maximum": 18.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_missing_customer_context",
+      "name": "Exception: Missing Customer Context",
+      "actor_id": "support_reviewer",
+      "description": "Request additional account details the AI could not find automatically.",
+      "base_duration_minutes": 12.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 6.0,
+        "maximum": 20.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_low_confidence",
+      "name": "Exception: Low-Confidence Response",
+      "actor_id": "support_reviewer",
+      "description": "Review and approve or rewrite a low-confidence AI-drafted response.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "uniform",
+        "minimum": 8.0,
+        "maximum": 25.0,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "exception_delayed_escalation",
+      "name": "Exception: Delayed Escalation",
+      "actor_id": "specialist",
+      "description": "Log and remediate an escalation that breached its SLA.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "ticket_intake",
+      "target": "triage",
+      "probability": 1.0,
+      "condition": ""
+    },
+    {
+      "source": "triage",
+      "target": "response_drafting",
+      "probability": 0.65,
+      "condition": "straightforward"
+    },
+    {
+      "source": "triage",
+      "target": "escalation",
+      "probability": 0.15,
+      "condition": "needs_escalation"
+    },
+    {
+      "source": "triage",
+      "target": "exception_wrong_classification",
+      "probability": 0.05,
+      "condition": "wrong_classification"
+    },
+    {
+      "source": "triage",
+      "target": "exception_missing_customer_context",
+      "probability": 0.15,
+      "condition": "missing_customer_context"
+    },
+    {
+      "source": "response_drafting",
+      "target": "follow_up",
+      "probability": 0.82,
+      "condition": "resolved"
+    },
+    {
+      "source": "response_drafting",
+      "target": "exception_low_confidence",
+      "probability": 0.18,
+      "condition": "low_confidence"
+    },
+    {
+      "source": "escalation",
+      "target": "follow_up",
+      "probability": 0.85,
+      "condition": "resolved"
+    },
+    {
+      "source": "escalation",
+      "target": "exception_delayed_escalation",
+      "probability": 0.15,
+      "condition": "delayed_escalation"
+    }
+  ]
+}

@@ -43,6 +43,9 @@ Repository = "https://github.com/example/B2B-Agentic-Workflow-Simulator"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+b2b_workflow_simulator = ["examples/data/*.json"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

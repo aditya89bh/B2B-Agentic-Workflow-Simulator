@@ -1,0 +1,180 @@
+{
+  "workflow_id": "sales-lead-qualification-after",
+  "name": "Sales Lead Qualification (After: AI-Augmented)",
+  "description": "Redesigned process where AI agents absorb high-volume, low-judgment stages so Account Executives spend their time only on qualified, high-value conversations.",
+  "entry_node_id": "lead_intake",
+  "actors": [
+    {
+      "actor_id": "intake_agent",
+      "name": "Lead Intake Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.15,
+      "speed_multiplier": 0.08,
+      "error_rate": 0.02,
+      "escalation_rate": 0.03,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "research_agent",
+      "name": "Account Research Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.4,
+      "speed_multiplier": 0.1,
+      "error_rate": 0.05,
+      "escalation_rate": 0.08,
+      "autonomy_level": "autonomous"
+    },
+    {
+      "actor_id": "proposal_agent",
+      "name": "Proposal Drafting Agent",
+      "type": "ai_agent",
+      "available_hours_per_day": 24.0,
+      "cost_per_execution": 0.6,
+      "speed_multiplier": 0.15,
+      "error_rate": 0.05,
+      "escalation_rate": 0.1,
+      "autonomy_level": "assist"
+    },
+    {
+      "actor_id": "ae",
+      "name": "Account Executive",
+      "type": "human",
+      "available_hours_per_day": 8.0,
+      "hourly_cost": 65.0,
+      "speed_multiplier": 1.0,
+      "error_rate": 0.04
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "lead_intake",
+      "name": "Lead Intake",
+      "actor_id": "intake_agent",
+      "description": "Structure the inbound lead record from raw form/email data.",
+      "base_duration_minutes": 10.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "initial_research",
+      "name": "Initial Research",
+      "actor_id": "research_agent",
+      "description": "Score account fit against the ICP using firmographic data.",
+      "base_duration_minutes": 15.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "discovery_call",
+      "name": "Discovery Call",
+      "actor_id": "ae",
+      "description": "Run a discovery call to validate needs and budget.",
+      "base_duration_minutes": 30.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "proposal_draft",
+      "name": "Proposal Draft",
+      "actor_id": "proposal_agent",
+      "description": "Generate a first-pass proposal draft for AE review.",
+      "base_duration_minutes": 45.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": false,
+      "metadata": {}
+    },
+    {
+      "node_id": "qualified_handoff",
+      "name": "Qualified Handoff",
+      "actor_id": "ae",
+      "description": "Hand the qualified opportunity to the deal desk.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    },
+    {
+      "node_id": "disqualified",
+      "name": "Disqualified",
+      "actor_id": "intake_agent",
+      "description": "Record the disqualification reason and close the lead.",
+      "base_duration_minutes": 5.0,
+      "duration_model": {
+        "kind": "fixed",
+        "minimum": null,
+        "maximum": null,
+        "mode": null
+      },
+      "is_terminal": true,
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "source": "lead_intake",
+      "target": "initial_research",
+      "probability": 1.0,
+      "condition": ""
+    },
+    {
+      "source": "initial_research",
+      "target": "discovery_call",
+      "probability": 0.6,
+      "condition": "fits_icp"
+    },
+    {
+      "source": "initial_research",
+      "target": "disqualified",
+      "probability": 0.4,
+      "condition": "does_not_fit_icp"
+    },
+    {
+      "source": "discovery_call",
+      "target": "proposal_draft",
+      "probability": 0.7,
+      "condition": "needs_confirmed"
+    },
+    {
+      "source": "discovery_call",
+      "target": "disqualified",
+      "probability": 0.3,
+      "condition": "no_budget_or_need"
+    },
+    {
+      "source": "proposal_draft",
+      "target": "qualified_handoff",
+      "probability": 1.0,
+      "condition": ""
+    }
+  ]
+}
