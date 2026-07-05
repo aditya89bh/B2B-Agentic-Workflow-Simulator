@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from b2b_workflow_simulator.ai_adoption import assess_ai_adoption, generate_ai_adoption_report
 from b2b_workflow_simulator.capacity_planning import (
     DEFAULT_OVERLOAD_THRESHOLD,
     DEFAULT_TARGET_UTILIZATION,
@@ -13,17 +14,29 @@ from b2b_workflow_simulator.capacity_planning import (
     analyze_capacity,
     generate_capacity_report,
 )
+from b2b_workflow_simulator.compliance import evaluate_compliance, generate_compliance_report
 from b2b_workflow_simulator.examples import (
     customer_support_ticket_resolution,
+    governance,
     invoice_processing,
     sales_lead_qualification,
 )
+from b2b_workflow_simulator.executive_report import (
+    build_executive_assessment,
+    generate_executive_report,
+)
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
 from b2b_workflow_simulator.html_report import (
+    render_ai_adoption_html,
     render_capacity_html,
+    render_compliance_html,
     render_diff_html,
+    render_executive_html,
     render_monte_carlo_comparison_html,
+    render_policy_html,
     render_portfolio_html,
+    render_recommendation_html,
+    render_risk_html,
     render_sensitivity_grid_html,
 )
 from b2b_workflow_simulator.kpi import KPIResult
@@ -31,10 +44,16 @@ from b2b_workflow_simulator.monte_carlo import (
     generate_monte_carlo_comparison_report,
     run_monte_carlo_comparison,
 )
+from b2b_workflow_simulator.policy import evaluate_policies, generate_policy_report
 from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
+from b2b_workflow_simulator.recommendation import (
+    generate_recommendation_report,
+    generate_recommendations,
+)
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.report import generate_portfolio_report, generate_report
+from b2b_workflow_simulator.risk import compute_risk, generate_risk_report
 from b2b_workflow_simulator.sensitivity import (
     PARAMETERS,
     format_sensitivity_table,
@@ -45,6 +64,7 @@ from b2b_workflow_simulator.sensitivity_grid import (
     run_sensitivity_grid,
 )
 from b2b_workflow_simulator.simulation import ENGINES, SimulationRunner
+from b2b_workflow_simulator.sla import evaluate_sla
 from b2b_workflow_simulator.workflow_io import load_workflow, save_workflow
 
 EXPORT_FORMATS = ("json", "csv")
@@ -61,6 +81,24 @@ EXAMPLES = {
     "customer-support-ticket-resolution": (
         customer_support_ticket_resolution.build_before_workflow,
         customer_support_ticket_resolution.build_after_workflow,
+    ),
+}
+
+GOVERNANCE = {
+    "sales-lead-qualification": (
+        governance.sales_lead_qualification_policies,
+        governance.sales_lead_qualification_compliance_requirements,
+        governance.sales_lead_qualification_slas,
+    ),
+    "invoice-processing": (
+        governance.invoice_processing_policies,
+        governance.invoice_processing_compliance_requirements,
+        governance.invoice_processing_slas,
+    ),
+    "customer-support-ticket-resolution": (
+        governance.customer_support_policies,
+        governance.customer_support_compliance_requirements,
+        governance.customer_support_slas,
     ),
 }
 
@@ -514,6 +552,189 @@ def team_utilization(
             print(f"  - {pool_id}: {utilization:.1%}")
             for worker_id, worker_util in sorted(kpi.worker_utilization.get(pool_id, {}).items()):
                 print(f"      - {worker_id}: {worker_util:.1%}")
+    return 0
+
+
+def _select_variant(example_name: str, variant: str):
+    """Build one variant ("before" or "after") of a bundled example.
+
+    Returns `None` (after printing an error) if `example_name` is unknown.
+    """
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(f"Unknown example '{example_name}'. Available: {available}", file=sys.stderr)
+        return None
+    build_before, build_after = EXAMPLES[example_name]
+    return build_before() if variant == "before" else build_after()
+
+
+def policy_analysis(example_name: str, variant: str, html_output: str | None) -> int:
+    """Evaluate a bundled example's attached policies and print a governance report."""
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+
+    policies_fn, _, _ = GOVERNANCE.get(example_name, (None, None, None))
+    policies = policies_fn() if policies_fn else []
+    evaluation = evaluate_policies(workflow, policies)
+
+    print(f"Example: {example_name} ({variant})")
+    print()
+    print(generate_policy_report(evaluation))
+
+    if html_output:
+        Path(html_output).write_text(render_policy_html(evaluation))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def compliance_analysis(example_name: str, variant: str, html_output: str | None) -> int:
+    """Evaluate a bundled example's compliance requirements and print a report."""
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+
+    _, compliance_fn, _ = GOVERNANCE.get(example_name, (None, None, None))
+    requirements = compliance_fn() if compliance_fn else []
+    report = evaluate_compliance(workflow, requirements)
+
+    print(f"Example: {example_name} ({variant})")
+    print()
+    print(generate_compliance_report(report))
+
+    if html_output:
+        Path(html_output).write_text(render_compliance_html(report))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def risk_analysis(
+    example_name: str,
+    variant: str,
+    num_cases: int,
+    seed: int | None,
+    arrival_interval_minutes: float | None,
+    html_output: str | None,
+) -> int:
+    """Simulate a bundled example variant and print an organizational risk assessment."""
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+
+    result = SimulationRunner(seed=seed).run(
+        workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes
+    )
+    policies_fn, compliance_fn, _ = GOVERNANCE.get(example_name, (None, None, None))
+    policy_evaluation = evaluate_policies(workflow, policies_fn()) if policies_fn else None
+    compliance_report = evaluate_compliance(workflow, compliance_fn()) if compliance_fn else None
+    assessment = compute_risk(workflow, result.kpi, policy_evaluation, compliance_report)
+
+    print(f"Example: {example_name} ({variant})")
+    print()
+    print(generate_risk_report(assessment))
+
+    if html_output:
+        Path(html_output).write_text(render_risk_html(assessment))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def readiness_analysis(
+    example_name: str,
+    variant: str,
+    num_cases: int,
+    seed: int | None,
+    html_output: str | None,
+) -> int:
+    """Simulate a bundled example variant and print an AI adoption readiness assessment."""
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+
+    result = SimulationRunner(seed=seed).run(workflow, num_cases)
+    policies_fn, _, _ = GOVERNANCE.get(example_name, (None, None, None))
+    policy_evaluation = evaluate_policies(workflow, policies_fn()) if policies_fn else None
+    assessment = assess_ai_adoption(workflow, result.kpi, policy_evaluation)
+
+    print(f"Example: {example_name} ({variant})")
+    print()
+    print(generate_ai_adoption_report(assessment))
+
+    if html_output:
+        Path(html_output).write_text(render_ai_adoption_html(assessment))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def recommend_redesign(
+    example_name: str,
+    variant: str,
+    num_cases: int,
+    seed: int | None,
+    html_output: str | None,
+) -> int:
+    """Simulate a bundled example variant and print actionable redesign recommendations."""
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+
+    result = SimulationRunner(seed=seed).run(workflow, num_cases)
+    policies_fn, compliance_fn, _ = GOVERNANCE.get(example_name, (None, None, None))
+    policy_evaluation = evaluate_policies(workflow, policies_fn()) if policies_fn else None
+    compliance_report = evaluate_compliance(workflow, compliance_fn()) if compliance_fn else None
+    risk_assessment = compute_risk(workflow, result.kpi, policy_evaluation, compliance_report)
+    recommendations = generate_recommendations(workflow, result.kpi, risk_assessment)
+
+    print(f"Example: {example_name} ({variant})")
+    print()
+    print(generate_recommendation_report(recommendations))
+
+    if html_output:
+        Path(html_output).write_text(render_recommendation_html(recommendations))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def executive_report(
+    example_name: str,
+    num_cases: int,
+    seed: int | None,
+    implementation_cost: float | None,
+    arrival_interval_minutes: float | None,
+    html_output: str | None,
+) -> int:
+    """Run both variants of a bundled example and print a full executive assessment report.
+
+    The report evaluates the "after" (redesigned) workflow, using the
+    "before" workflow only to compute the ROI section.
+    """
+    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes)
+    if outcome is None:
+        return 1
+    _before_workflow, after_workflow, before_result, after_result = outcome
+
+    diff = compare_workflows(before_result.kpi, after_result.kpi, implementation_cost)
+    policies_fn, compliance_fn, sla_fn = GOVERNANCE.get(example_name, (None, None, None))
+    policy_evaluation = evaluate_policies(after_workflow, policies_fn()) if policies_fn else None
+    compliance_report = (
+        evaluate_compliance(after_workflow, compliance_fn()) if compliance_fn else None
+    )
+    sla_report = evaluate_sla(after_result, sla_fn()) if sla_fn else None
+
+    assessment = build_executive_assessment(
+        after_workflow,
+        after_result.kpi,
+        redesign_diff=diff,
+        policy_evaluation=policy_evaluation,
+        compliance_report=compliance_report,
+        sla_report=sla_report,
+    )
+
+    print(generate_executive_report(assessment))
+
+    if html_output:
+        Path(html_output).write_text(render_executive_html(assessment))
+        print(f"\nHTML report written to {html_output}")
     return 0
 
 
@@ -1140,6 +1361,192 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minutes between case arrivals; enables capacity-aware queueing.",
     )
 
+    policy_parser = subparsers.add_parser(
+        "policy-analysis",
+        help="Evaluate a bundled example's attached policies and print a governance report.",
+    )
+    policy_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to analyze.",
+    )
+    policy_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    policy_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML policy report to this path.",
+    )
+
+    compliance_parser = subparsers.add_parser(
+        "compliance-analysis",
+        help="Evaluate a bundled example's compliance requirements and print a report.",
+    )
+    compliance_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to analyze.",
+    )
+    compliance_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    compliance_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML compliance report to this path.",
+    )
+
+    risk_parser = subparsers.add_parser(
+        "risk-analysis",
+        help="Simulate a bundled example variant and print an organizational risk assessment.",
+    )
+    risk_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to analyze.",
+    )
+    risk_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    risk_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate (default: 200).",
+    )
+    risk_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    risk_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    risk_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML risk report to this path.",
+    )
+
+    readiness_parser = subparsers.add_parser(
+        "readiness-analysis",
+        help="Simulate a bundled example variant and print an AI adoption readiness assessment.",
+    )
+    readiness_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to analyze.",
+    )
+    readiness_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    readiness_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate (default: 200).",
+    )
+    readiness_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    readiness_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML AI adoption report to this path.",
+    )
+
+    recommend_parser = subparsers.add_parser(
+        "recommend-redesign",
+        help="Simulate a bundled example variant and print actionable redesign recommendations.",
+    )
+    recommend_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to analyze.",
+    )
+    recommend_parser.add_argument(
+        "--variant",
+        choices=("before", "after"),
+        default="after",
+        help="Which workflow variant to analyze (default: after).",
+    )
+    recommend_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate (default: 200).",
+    )
+    recommend_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    recommend_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML recommendation report to this path.",
+    )
+
+    executive_parser = subparsers.add_parser(
+        "executive-report",
+        help="Run a bundled example and print a full executive assessment report.",
+    )
+    executive_parser.add_argument(
+        "name",
+        choices=sorted(EXAMPLES),
+        help="Name of the bundled example to analyze.",
+    )
+    executive_parser.add_argument(
+        "--cases",
+        type=int,
+        default=200,
+        help="Number of cases to simulate per variant (default: 200).",
+    )
+    executive_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    executive_parser.add_argument(
+        "--implementation-cost",
+        type=float,
+        default=None,
+        help="One-time cost of implementing the redesign, for payback analysis.",
+    )
+    executive_parser.add_argument(
+        "--arrival-interval",
+        type=float,
+        default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+    executive_parser.add_argument(
+        "--html-output",
+        default=None,
+        help="If set, also write a static HTML executive report to this path.",
+    )
+
     return parser
 
 
@@ -1251,6 +1658,38 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "team-utilization":
         return team_utilization(
             args.name, args.variant, args.cases, args.seed, args.arrival_interval
+        )
+
+    if args.command == "policy-analysis":
+        return policy_analysis(args.name, args.variant, args.html_output)
+
+    if args.command == "compliance-analysis":
+        return compliance_analysis(args.name, args.variant, args.html_output)
+
+    if args.command == "risk-analysis":
+        return risk_analysis(
+            args.name,
+            args.variant,
+            args.cases,
+            args.seed,
+            args.arrival_interval,
+            args.html_output,
+        )
+
+    if args.command == "readiness-analysis":
+        return readiness_analysis(args.name, args.variant, args.cases, args.seed, args.html_output)
+
+    if args.command == "recommend-redesign":
+        return recommend_redesign(args.name, args.variant, args.cases, args.seed, args.html_output)
+
+    if args.command == "executive-report":
+        return executive_report(
+            args.name,
+            args.cases,
+            args.seed,
+            args.implementation_cost,
+            args.arrival_interval,
+            args.html_output,
         )
 
     parser.print_help()
