@@ -68,6 +68,111 @@ def test_run_example_supports_customer_support_ticket_resolution(capsys):
     assert "customer-support-ticket-resolution" in output
 
 
+def test_run_portfolio_prints_summary_for_each_workflow(capsys):
+    exit_code = main(
+        [
+            "run-portfolio",
+            "sales-lead-qualification",
+            "invoice-processing",
+            "--cases",
+            "20",
+            "--seed",
+            "1",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "sales-lead-qualification" in output
+    assert "invoice-processing" in output
+    assert "Before Cost" in output
+
+
+def test_run_portfolio_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import run_portfolio
+
+    exit_code = run_portfolio(["not-a-real-example"], 10, 1)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_compare_portfolio_prints_full_report(capsys):
+    exit_code = main(
+        [
+            "compare-portfolio",
+            "sales-lead-qualification",
+            "invoice-processing",
+            "--cases",
+            "30",
+            "--seed",
+            "1",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "WORKFLOW PORTFOLIO ANALYSIS" in output
+    assert "WORKFLOW RANKING" in output
+    assert "RECOMMENDED ROLLOUT ORDER" in output
+
+
+def test_compare_portfolio_writes_html_report_when_requested(tmp_path, capsys):
+    html_path = tmp_path / "portfolio.html"
+    exit_code = main(
+        [
+            "compare-portfolio",
+            "sales-lead-qualification",
+            "invoice-processing",
+            "--cases",
+            "20",
+            "--seed",
+            "1",
+            "--html-output",
+            str(html_path),
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert html_path.exists()
+    assert "<!DOCTYPE html>" in html_path.read_text()
+    assert "HTML report written" in output
+
+
+def test_compare_portfolio_supports_rank_by_roi_percentage(capsys):
+    exit_code = main(
+        [
+            "compare-portfolio",
+            "sales-lead-qualification",
+            "invoice-processing",
+            "--cases",
+            "20",
+            "--seed",
+            "1",
+            "--rank-by",
+            "roi_percentage",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "WORKFLOW RANKING" in output
+
+
+def test_compare_portfolio_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import compare_portfolio
+
+    exit_code = compare_portfolio(
+        ["not-a-real-example"], 10, 1, None, None, "total_cost_savings", None
+    )
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
 def test_compare_example_prints_full_roi_report(capsys):
     exit_code = main(
         ["compare-example", "sales-lead-qualification", "--cases", "50", "--seed", "1"]
