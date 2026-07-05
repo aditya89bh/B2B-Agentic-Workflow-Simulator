@@ -8,10 +8,15 @@ from dataclasses import dataclass, field
 from b2b_workflow_simulator.arrivals import ArrivalModel
 from b2b_workflow_simulator.capacity import ActorScheduler
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.multi_resource import (
+    MultiResourceScheduledExecution,
+    schedule_multi_resource_execution,
+)
 from b2b_workflow_simulator.pool import ActorPool, PoolScheduler
 from b2b_workflow_simulator.primitives.actor import Actor
 from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
 from b2b_workflow_simulator.primitives.event import Event, EventType
+from b2b_workflow_simulator.primitives.node import Node
 from b2b_workflow_simulator.primitives.task import Task
 from b2b_workflow_simulator.workflow import Workflow
 
@@ -89,6 +94,54 @@ def schedule_task_execution(
         error_rate=node_actor.error_rate,
         escalation_rate=node_actor.escalation_rate if is_ai_agent else 0.0,
         checks_escalation=is_ai_agent,
+    )
+
+
+def resolve_task_schedule(
+    workflow: Workflow,
+    node: Node,
+    sampled_base_duration: float,
+    ready_time: float,
+    scheduler: ActorScheduler | None,
+    pool_scheduler: PoolScheduler,
+) -> tuple[ScheduledExecution | MultiResourceScheduledExecution, bool, dict]:
+    """Resolve one task's execution, dispatching to multi-resource scheduling when needed.
+
+    Returns the resolved schedule, whether the task should be treated as
+    capacity-tracked (affects whether TASK_QUEUED/RESOURCE_RELEASED events
+    are emitted and wait time is aggregated), and any extra event details
+    (worker id, participant list) to attach to TASK_STARTED.
+    """
+    if node.is_multi_resource:
+        actors = [workflow.get_actor(actor_id) for actor_id in node.required_actor_ids]
+        scheduled = schedule_multi_resource_execution(
+            actors, sampled_base_duration, ready_time, scheduler, pool_scheduler
+        )
+        tracks_capacity = scheduler is not None or any(
+            isinstance(actor, ActorPool) for actor in actors
+        )
+        details: dict = {"participants": list(scheduled.participant_actor_ids)}
+        if scheduled.worker_id:
+            details["worker_id"] = scheduled.worker_id
+        return scheduled, tracks_capacity, details
+
+    actor = workflow.get_actor(node.actor_id)
+    scheduled_execution = schedule_task_execution(
+        actor, sampled_base_duration, ready_time, scheduler, pool_scheduler
+    )
+    tracks_capacity = scheduler is not None or isinstance(actor, ActorPool)
+    details = {"worker_id": scheduled_execution.worker_id} if scheduled_execution.worker_id else {}
+    return scheduled_execution, tracks_capacity, details
+
+
+def record_multi_resource_totals(
+    kpi: KPIResult, node_id: str, coordination_delay_minutes: float
+) -> None:
+    """Add one multi-resource task's coordination delay into the running KPI totals."""
+    kpi.multi_resource_task_count += 1
+    kpi.total_coordination_delay_minutes += coordination_delay_minutes
+    kpi.node_coordination_delay_minutes[node_id] = (
+        kpi.node_coordination_delay_minutes.get(node_id, 0.0) + coordination_delay_minutes
     )
 
 
@@ -293,15 +346,17 @@ class SimulationRunner:
                 case_id=case_id,
             )
             sampled_base = node.duration_model.sample(self._rng, node.base_duration_minutes)
-            is_pool = isinstance(actor, ActorPool)
-            tracks_capacity = scheduler is not None or is_pool
 
-            scheduled = schedule_task_execution(
-                actor, sampled_base, clock, scheduler, pool_scheduler
+            scheduled, tracks_capacity, details = resolve_task_schedule(
+                workflow, node, sampled_base, clock, scheduler, pool_scheduler
             )
             start, end, wait = scheduled.start, scheduled.end, scheduled.wait_minutes
             duration, cost = scheduled.duration, scheduled.cost
-            details = {"worker_id": scheduled.worker_id} if scheduled.worker_id else {}
+
+            if node.is_multi_resource:
+                record_multi_resource_totals(
+                    kpi, node.node_id, scheduled.coordination_delay_minutes
+                )
 
             if tracks_capacity:
                 kpi.total_wait_minutes += wait
@@ -387,6 +442,8 @@ __all__ = [
     "resolve_arrival_times",
     "ScheduledExecution",
     "schedule_task_execution",
+    "resolve_task_schedule",
     "record_actor_utilization",
     "record_pool_utilization",
+    "record_multi_resource_totals",
 ]
