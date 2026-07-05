@@ -509,9 +509,7 @@ def test_export_example_writes_csv_comparison_only(tmp_path):
 def test_export_example_rejects_unknown_example(tmp_path, capsys):
     from b2b_workflow_simulator.cli import export_example
 
-    exit_code = export_example(
-        "not-a-real-example", 10, 1, "json", str(tmp_path), None, None
-    )
+    exit_code = export_example("not-a-real-example", 10, 1, "json", str(tmp_path), None, None)
     error_output = capsys.readouterr().err
 
     assert exit_code == 1
@@ -722,9 +720,7 @@ def test_capacity_analysis_writes_html_file(tmp_path):
 def test_capacity_analysis_rejects_unknown_example(capsys):
     from b2b_workflow_simulator.cli import capacity_analysis
 
-    exit_code = capacity_analysis(
-        "not-a-real-example", "after", 20, 1, None, 0.75, 0.9, 0.4, None
-    )
+    exit_code = capacity_analysis("not-a-real-example", "after", 20, 1, None, 0.75, 0.9, 0.4, None)
     error_output = capsys.readouterr().err
 
     assert exit_code == 1
@@ -762,6 +758,229 @@ def test_team_utilization_rejects_unknown_example(capsys):
     from b2b_workflow_simulator.cli import team_utilization
 
     exit_code = team_utilization("not-a-real-example", "after", 20, 1, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_policy_analysis_prints_report(capsys):
+    exit_code = main(["policy-analysis", "invoice-processing", "--variant", "after"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "POLICY COMPLIANCE ANALYSIS" in output
+
+
+def test_policy_analysis_writes_html_file(tmp_path):
+    output_path = tmp_path / "policy.html"
+    exit_code = main(
+        [
+            "policy-analysis",
+            "invoice-processing",
+            "--variant",
+            "after",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_policy_analysis_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import policy_analysis
+
+    exit_code = policy_analysis("not-a-real-example", "after", None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_compliance_analysis_prints_report(capsys):
+    exit_code = main(["compliance-analysis", "invoice-processing", "--variant", "after"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "COMPLIANCE ANALYSIS" in output
+
+
+def test_compliance_analysis_writes_html_file(tmp_path):
+    output_path = tmp_path / "compliance.html"
+    exit_code = main(
+        [
+            "compliance-analysis",
+            "invoice-processing",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_compliance_analysis_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import compliance_analysis
+
+    exit_code = compliance_analysis("not-a-real-example", "after", None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_risk_analysis_prints_report(capsys):
+    exit_code = main(["risk-analysis", "invoice-processing", "--variant", "after", "--cases", "50"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Organizational Risk Assessment" in output
+    assert "Overall risk score" in output
+
+
+def test_risk_analysis_writes_html_file(tmp_path):
+    output_path = tmp_path / "risk.html"
+    exit_code = main(
+        [
+            "risk-analysis",
+            "invoice-processing",
+            "--cases",
+            "50",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_risk_analysis_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import risk_analysis
+
+    exit_code = risk_analysis("not-a-real-example", "after", 20, 1, None, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_readiness_analysis_prints_report(capsys):
+    exit_code = main(
+        ["readiness-analysis", "invoice-processing", "--variant", "after", "--cases", "50"]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "AI Adoption Assessment" in output
+    assert "Readiness index" in output
+
+
+def test_readiness_analysis_writes_html_file(tmp_path):
+    output_path = tmp_path / "readiness.html"
+    exit_code = main(
+        [
+            "readiness-analysis",
+            "invoice-processing",
+            "--cases",
+            "50",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_readiness_analysis_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import readiness_analysis
+
+    exit_code = readiness_analysis("not-a-real-example", "after", 20, 1, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_recommend_redesign_prints_report(capsys):
+    exit_code = main(
+        ["recommend-redesign", "invoice-processing", "--variant", "after", "--cases", "50"]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Recommendations:" in output
+
+
+def test_recommend_redesign_writes_html_file(tmp_path):
+    output_path = tmp_path / "recommend.html"
+    exit_code = main(
+        [
+            "recommend-redesign",
+            "invoice-processing",
+            "--cases",
+            "50",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_recommend_redesign_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import recommend_redesign
+
+    exit_code = recommend_redesign("not-a-real-example", "after", 20, 1, None)
+    error_output = capsys.readouterr().err
+
+    assert exit_code == 1
+    assert "Unknown example" in error_output
+
+
+def test_executive_report_prints_report(capsys):
+    exit_code = main(["executive-report", "invoice-processing", "--cases", "50"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "EXECUTIVE ASSESSMENT REPORT" in output
+    assert "KPI SUMMARY" in output
+    assert "ROI" in output
+    assert "AI ADOPTION ASSESSMENT" in output
+
+
+def test_executive_report_writes_html_file(tmp_path):
+    output_path = tmp_path / "executive.html"
+    exit_code = main(
+        [
+            "executive-report",
+            "invoice-processing",
+            "--cases",
+            "50",
+            "--html-output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert output_path.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_executive_report_rejects_unknown_example(capsys):
+    from b2b_workflow_simulator.cli import executive_report
+
+    exit_code = executive_report("not-a-real-example", 20, 1, None, None, None)
     error_output = capsys.readouterr().err
 
     assert exit_code == 1
