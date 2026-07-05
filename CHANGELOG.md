@@ -1,5 +1,66 @@
 # Changelog
 
+## Phase 4 - Enterprise Process Simulation
+
+Transformed the simulator from a single-process modeling tool into an
+enterprise-grade business process simulation engine: true event-driven
+scheduling, realistic arrival patterns, team-based workforce modeling,
+Monte Carlo variability analysis, multi-parameter sensitivity, and
+capacity planning.
+
+- Discrete-event simulation engine: `discrete_event.py` adds
+  `DiscreteEventEngine`, processing arrivals and task completions
+  through a single global, time-ordered priority queue instead of one
+  case at a time. `SimulationRunner.run()` accepts `engine="simple"`
+  (default, unchanged) or `engine="discrete"`; both share the same
+  scheduling helpers and produce identical results under light
+  contention. Added `TASK_QUEUED` and `RESOURCE_RELEASED` events for
+  fine-grained queueing visibility in capacity-aware runs.
+- Advanced arrival modelling: `arrivals.py` adds `ArrivalModel`
+  supporting fixed, uniform-random, batched, business-hour, and
+  peak-hour arrival patterns, fully seeded and deterministic; wired
+  into both simulation engines via `arrival_model=`.
+- Queueing analysis: `queueing.py` reconstructs queue depth over time,
+  actor idle minutes, and throughput from a run's event log, and
+  classifies each actor's queue trend as growing, collapsing, or
+  stable using a time-weighted comparison across the run.
+- Team pools and workforce scheduling: `primitives/worker.py` and
+  `primitives/shift.py` add `Worker` and `Shift`; `pool.py` adds
+  `ActorPool` (a team of workers scheduled as one actor) and
+  `PoolScheduler` (least-loaded routing respecting shift days/hours,
+  overtime capacity, and unavailable workers). `KPIResult` gains
+  `pool_utilization` and `worker_utilization` for team-level and
+  per-worker capacity reporting. Wired into both simulation engines.
+- Monte Carlo analysis: `monte_carlo.py` adds `run_monte_carlo()` and
+  `run_monte_carlo_comparison()`, re-simulating a workflow (or a
+  before/after pair) across many seeds and reporting mean, min, max,
+  median, P10, and P90 for every KPI, ROI, and payback, plus plain-text
+  and HTML executive reports explaining outcome variability.
+- Multi-parameter sensitivity: `sensitivity_grid.py` extends the
+  single-parameter sweep to a two-dimensional grid, classifying every
+  `(x, y)` combination as a safe, negative-ROI, or operationally
+  unstable operating region; plain-text and HTML ROI matrix reports.
+- Capacity planning: `capacity_planning.py` adds `analyze_capacity()`
+  (staffing recommendations against a target utilization, flagging
+  overloaded/underutilized resources) and `simulate_hiring()`
+  (re-simulates a workflow with proposed additional pool workers to
+  verify a specific hire's impact on utilization, queue depth, and
+  wait time), with plain-text and HTML reports.
+- CLI: added `monte-carlo-example`, `monte-carlo-portfolio`,
+  `sensitivity-grid-example`, `capacity-analysis`, and
+  `team-utilization`; `run-example` and `compare-example` now accept
+  `--engine simple|discrete`.
+- Unit test coverage for discrete-event scheduling and ordering,
+  arrival models, actor pools and shift scheduling, queue behavior
+  analysis, Monte Carlo aggregation and percentile calculations,
+  multi-parameter sensitivity and region classification, capacity
+  planning and hiring simulation, every new CLI command, and
+  backward compatibility of the existing simple-engine API.
+- Documentation: updated README, architecture, and capacity modeling
+  docs; added `docs/discrete_event_engine.md`, `docs/team_capacity.md`,
+  `docs/monte_carlo.md`, `docs/advanced_sensitivity.md`, and
+  `docs/capacity_planning.md`.
+
 ## Phase 3 - Portfolios, Sensitivity Analysis, and Persistence
 
 Added the tooling needed to run this beyond a single workflow: comparing
