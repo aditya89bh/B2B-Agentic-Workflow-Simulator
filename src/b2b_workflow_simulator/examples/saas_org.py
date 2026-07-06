@@ -348,10 +348,15 @@ def build_saas_shared_resources() -> SharedResourcePool:
 
     Returns:
         A :class:`~b2b_workflow_simulator.shared_resources.SharedResourcePool`
-        with seven shared resources serving multiple departments.
+        with eight shared resources serving multiple departments, each
+        wired to the workflow actor IDs from the bundled examples via
+        ``actor_ids``.
     """
     pool = SharedResourcePool(org_id=_ORG_ID)
 
+    # actor_ids reference the workflow actor IDs from the bundled examples
+    # (sales-lead-qualification-after, invoice-processing-after,
+    #  customer-support-ticket-resolution-after).
     resources = [
         SharedResource(
             resource_id="legal-counsel",
@@ -360,6 +365,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=240.0,
             cost_per_use=150.0,
             department_ids=["legal", "sales", "finance"],
+            actor_ids=["support_reviewer", "approval_agent"],
         ),
         SharedResource(
             resource_id="finance-approver",
@@ -368,6 +374,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=120.0,
             cost_per_use=200.0,
             department_ids=["finance", "operations"],
+            actor_ids=["ap_specialist"],
         ),
         SharedResource(
             resource_id="ops-specialist",
@@ -376,6 +383,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=480.0,
             cost_per_use=80.0,
             department_ids=["operations", "sales", "customer-success"],
+            actor_ids=["ae", "specialist"],
         ),
         SharedResource(
             resource_id="ai-platform",
@@ -384,6 +392,10 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=1440.0,
             cost_per_use=2.0,
             department_ids=["sales", "customer-success", "finance", "ai-transformation"],
+            actor_ids=[
+                "intake_agent", "research_agent", "proposal_agent",
+                "validation_agent", "triage_agent", "response_agent",
+            ],
         ),
         SharedResource(
             resource_id="crm-system",
@@ -392,6 +404,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=2880.0,
             cost_per_use=0.5,
             department_ids=["sales", "customer-success"],
+            actor_ids=["ae", "specialist"],
         ),
         SharedResource(
             resource_id="erp-system",
@@ -400,6 +413,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=1440.0,
             cost_per_use=1.0,
             department_ids=["finance", "operations"],
+            actor_ids=["ap_specialist"],
         ),
         SharedResource(
             resource_id="external-auditor",
@@ -408,6 +422,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=60.0,
             cost_per_use=500.0,
             department_ids=["finance", "legal"],
+            actor_ids=["support_reviewer", "ap_specialist"],
         ),
         SharedResource(
             resource_id="it-manager",
@@ -416,6 +431,7 @@ def build_saas_shared_resources() -> SharedResourcePool:
             capacity_minutes_per_day=240.0,
             cost_per_use=100.0,
             department_ids=["operations", "ai-transformation"],
+            actor_ids=[],
         ),
     ]
     for resource in resources:
