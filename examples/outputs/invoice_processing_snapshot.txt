@@ -1,0 +1,53 @@
+================================================================
+EXECUTIVE SNAPSHOT: Invoice Processing (After: AI-Augmented)
+================================================================
+
+DECISION
+----------------------------------------------------------------
+Recommended: the redesigned workflow reduces cost by $7,504 across the simulated volume while maintaining or improving completion rate.
+
+KPI SUMMARY
+----------------------------------------------------------------
+Metric                             Before        After
+------------------------------------------------------
+Completion rate                    88.3%       92.7%
+Failure rate                       11.7%        7.3%
+Avg cost / case              $     29.80 $      4.79
+Avg cycle time (min)                49.7         8.3
+Escalation rate                     0.0%       14.0%
+
+ROI SUMMARY
+----------------------------------------------------------------
+Total cost savings:  $7,503.96
+ROI percentage:      +83.9%
+Implementation cost: $8,000.00
+Payback:             ~320 cases
+
+TOP 3 BOTTLENECKS
+----------------------------------------------------------------
+  1. exception_mismatched_amount (816 min total)
+  2. exception_missing_po (505 min total)
+  3. exception_vendor_data_issue (378 min total)
+
+TOP 3 RISKS
+----------------------------------------------------------------
+  1. No material risks identified from the simulated metrics.
+
+TOP 3 RECOMMENDATIONS
+----------------------------------------------------------------
+  1. Proceed with a controlled pilot rollout.
+
+ASSUMPTIONS
+----------------------------------------------------------------
+  - Cases are simulated with randomly sampled durations; results reflect expected values.
+  - AI error rates and costs are taken from the workflow definition; update for your context.
+  - Implementation cost (if supplied) is a one-time investment; recurring AI platform costs should be factored in separately.
+  - The 'after' workflow may require process change management not captured in the simulation.
+
+WHAT TO VALIDATE NEXT
+----------------------------------------------------------------
+  - Run with arrival_interval to model realistic queueing (current run is unconstrained).
+  - Validate AI error rates against actual production data before commitment.
+  - Pilot with one team or one process variant before full rollout.
+  - Review SLA requirements against the simulated cycle time distribution.
+  - Confirm implementation cost estimate with engineering and vendor quotes.

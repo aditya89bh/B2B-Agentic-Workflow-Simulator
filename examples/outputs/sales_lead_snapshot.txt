@@ -1,0 +1,53 @@
+================================================================
+EXECUTIVE SNAPSHOT: Sales Lead Qualification (After: AI-Augmented)
+================================================================
+
+DECISION
+----------------------------------------------------------------
+Recommended: the redesigned workflow reduces cost by $10,276 across the simulated volume while maintaining or improving completion rate.
+
+KPI SUMMARY
+----------------------------------------------------------------
+Metric                             Before        After
+------------------------------------------------------
+Completion rate                    84.3%       89.0%
+Failure rate                       15.7%       11.0%
+Avg cost / case              $     55.21 $     20.96
+Avg cycle time (min)                63.3        23.7
+Escalation rate                     0.0%       14.0%
+
+ROI SUMMARY
+----------------------------------------------------------------
+Total cost savings:  $10,276.27
+ROI percentage:      +62.0%
+Implementation cost: $8,000.00
+Payback:             ~234 cases
+
+TOP 3 BOTTLENECKS
+----------------------------------------------------------------
+  1. discovery_call (5,010 min total)
+  2. proposal_draft (803 min total)
+  3. qualified_handoff (555 min total)
+
+TOP 3 RISKS
+----------------------------------------------------------------
+  1. No material risks identified from the simulated metrics.
+
+TOP 3 RECOMMENDATIONS
+----------------------------------------------------------------
+  1. Proceed with a controlled pilot rollout.
+
+ASSUMPTIONS
+----------------------------------------------------------------
+  - Cases are simulated with randomly sampled durations; results reflect expected values.
+  - AI error rates and costs are taken from the workflow definition; update for your context.
+  - Implementation cost (if supplied) is a one-time investment; recurring AI platform costs should be factored in separately.
+  - The 'after' workflow may require process change management not captured in the simulation.
+
+WHAT TO VALIDATE NEXT
+----------------------------------------------------------------
+  - Run with arrival_interval to model realistic queueing (current run is unconstrained).
+  - Validate AI error rates against actual production data before commitment.
+  - Pilot with one team or one process variant before full rollout.
+  - Review SLA requirements against the simulated cycle time distribution.
+  - Confirm implementation cost estimate with engineering and vendor quotes.

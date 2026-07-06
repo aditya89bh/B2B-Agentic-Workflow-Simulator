@@ -1,0 +1,54 @@
+================================================================
+EXECUTIVE SNAPSHOT: Customer Support Ticket Resolution (After: AI-Augmented)
+================================================================
+
+DECISION
+----------------------------------------------------------------
+Conditional: cost falls by $3,752 but completion rate drops by 1.7%; validate the quality trade-off before rollout.
+
+KPI SUMMARY
+----------------------------------------------------------------
+Metric                             Before        After
+------------------------------------------------------
+Completion rate                    94.7%       93.0%
+Failure rate                        5.3%        7.0%
+Avg cost / case              $     19.33 $      6.82
+Avg cycle time (min)                39.9        11.7
+Escalation rate                     0.0%        9.0%
+
+ROI SUMMARY
+----------------------------------------------------------------
+Total cost savings:  $3,751.53
+ROI percentage:      +64.7%
+Implementation cost: $8,000.00
+Payback:             ~640 cases
+
+TOP 3 BOTTLENECKS
+----------------------------------------------------------------
+  1. escalation (1,759 min total)
+  2. exception_missing_customer_context (531 min total)
+  3. exception_low_confidence (519 min total)
+
+TOP 3 RISKS
+----------------------------------------------------------------
+  1. Failure rate increases by 1.7% in the redesign; confirm the root cause before rollout.
+  2. Completion rate drops by 1.7% in the redesign; validate that this trade-off is acceptable.
+
+TOP 3 RECOMMENDATIONS
+----------------------------------------------------------------
+  1. Proceed with a controlled pilot rollout.
+
+ASSUMPTIONS
+----------------------------------------------------------------
+  - Cases are simulated with randomly sampled durations; results reflect expected values.
+  - AI error rates and costs are taken from the workflow definition; update for your context.
+  - Implementation cost (if supplied) is a one-time investment; recurring AI platform costs should be factored in separately.
+  - The 'after' workflow may require process change management not captured in the simulation.
+
+WHAT TO VALIDATE NEXT
+----------------------------------------------------------------
+  - Run with arrival_interval to model realistic queueing (current run is unconstrained).
+  - Validate AI error rates against actual production data before commitment.
+  - Pilot with one team or one process variant before full rollout.
+  - Review SLA requirements against the simulated cycle time distribution.
+  - Confirm implementation cost estimate with engineering and vendor quotes.
