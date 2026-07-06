@@ -2,18 +2,17 @@
 
 Individual workflow simulations model one process at a time.
 `CrossWorkflowSimulator` runs a configurable set of workflows that all
-share the same organization, accumulating shared resource usage and
-producing a combined result that can be analysed at the portfolio level.
+share the same organization and optionally a shared resource pool.
 
 Key design decisions:
 
 - Each workflow gets its own ``SimulationRunner`` (and therefore its own
   random stream) so results are individually reproducible.
-- Shared resource usage is *recorded analytically* based on the
-  simulated KPI output (actor busy minutes map to resource minutes); it
-  is not modelled through the discrete-event engine.  This keeps the
-  cross-workflow layer lightweight and compatible with both simulation
-  engines.
+- When a ``SharedResourcePool`` is supplied to ``CrossWorkflowSimulator``,
+  each workflow's KPI actor busy-minutes are mapped to resource demand via
+  the ``actor_ids`` field on each ``SharedResource``.  Usage is recorded
+  via :meth:`~b2b_workflow_simulator.shared_resources.SharedResourcePool.record_usage_from_kpi`
+  after each workflow run; contention ratios are then available on the pool.
 - The ``CrossWorkflowResult`` exposes per-workflow ``SimulationResult``
   objects so all existing Phase 1-5 analysis functions work unchanged.
 """
@@ -22,9 +21,28 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from b2b_workflow_simulator.kpi import KPIResult
 from b2b_workflow_simulator.org_model import Organization
+from b2b_workflow_simulator.shared_resources import SharedResourcePool
 from b2b_workflow_simulator.simulation import ENGINES, SimulationResult, SimulationRunner
 from b2b_workflow_simulator.workflow import Workflow
+
+
+def _actor_busy_minutes(workflow: Workflow, kpi: KPIResult) -> dict[str, float]:
+    """Return per-actor busy minutes, falling back to node total durations.
+
+    When the simulation ran without capacity-aware scheduling (no arrival
+    interval), ``kpi.actor_busy_minutes`` is empty.  In that case, actor
+    busy time is approximated by summing ``node_total_duration_minutes``
+    across all nodes assigned to each actor.
+    """
+    if kpi.actor_busy_minutes:
+        return kpi.actor_busy_minutes
+    actor_minutes: dict[str, float] = {}
+    for node_id, node in workflow.nodes.items():
+        duration = kpi.node_total_duration_minutes.get(node_id, 0.0)
+        actor_minutes[node.actor_id] = actor_minutes.get(node.actor_id, 0.0) + duration
+    return actor_minutes
 
 
 @dataclass
@@ -137,7 +155,12 @@ class CrossWorkflowSimulator:
         result = sim.run()
     """
 
-    def __init__(self, organization: Organization, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        organization: Organization,
+        seed: int | None = None,
+        shared_resource_pool: SharedResourcePool | None = None,
+    ) -> None:
         """
         Args:
             organization: The organizational context for the run.
@@ -145,9 +168,16 @@ class CrossWorkflowSimulator:
                 not specify its own seed, the simulator uses
                 ``seed + index`` so each workflow still gets a distinct
                 but reproducible random stream.
+            shared_resource_pool: Optional pool of shared resources.  When
+                provided, each workflow's KPI actor busy-minutes are mapped
+                to resource demand via ``SharedResource.actor_ids`` and
+                recorded into the pool after each simulation run.  Contention
+                ratios are then available on the pool immediately after
+                :meth:`run` returns.
         """
         self._org = organization
         self._seed = seed
+        self._pool = shared_resource_pool
         self._configs: list[WorkflowRunConfig] = []
 
     def add_workflow(self, config: WorkflowRunConfig) -> CrossWorkflowSimulator:
@@ -158,9 +188,10 @@ class CrossWorkflowSimulator:
     def run(self) -> CrossWorkflowResult:
         """Execute all configured workflows and return the combined result.
 
-        Each workflow is simulated independently.  The combined
-        ``CrossWorkflowResult`` holds individual ``SimulationResult``
-        objects for downstream Phase 1-5 analysis.
+        Each workflow is simulated independently.  When a
+        ``shared_resource_pool`` was supplied at construction, actor busy
+        minutes from each run's KPI are mapped to shared resources via
+        :meth:`~b2b_workflow_simulator.shared_resources.SharedResourcePool.record_usage_from_kpi`.
 
         Returns:
             A :class:`CrossWorkflowResult` with one entry per workflow.
@@ -183,12 +214,24 @@ class CrossWorkflowSimulator:
                 engine=config.engine,
             )
             combined.results[config.workflow.workflow_id] = result
+            if self._pool is not None:
+                dept_id = config.dept_id or config.workflow.workflow_id
+                self._pool.record_usage_from_kpi(
+                    config.workflow.workflow_id,
+                    dept_id,
+                    _actor_busy_minutes(config.workflow, result.kpi),
+                )
         return combined
 
     @property
     def organization(self) -> Organization:
         """The organization this simulator runs against."""
         return self._org
+
+    @property
+    def shared_resource_pool(self) -> SharedResourcePool | None:
+        """The shared resource pool this simulator records usage into, or ``None``."""
+        return self._pool
 
     @property
     def workflow_count(self) -> int:
