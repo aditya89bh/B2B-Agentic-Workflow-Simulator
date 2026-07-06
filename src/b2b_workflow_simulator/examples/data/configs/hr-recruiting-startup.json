@@ -1,0 +1,65 @@
+{
+  "base_scenario_slug": "hr-recruiting-screening",
+  "configured_slug": "hr-recruiting-startup",
+  "configured_name": "HR Recruiting \u2014 High-Growth Tech Startup",
+  "client_name": "Velocity Tech Inc.",
+  "description": "Calibrated for a Series B startup with 50-person talent team, high hiring velocity, and lower HR coordinator cost.",
+  "profile_name": "aggressive",
+  "actor_overrides": [
+    {
+      "actor_id": "recruiter",
+      "name": null,
+      "hourly_cost": 38.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.06,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "hiring_manager",
+      "name": null,
+      "hourly_cost": 80.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": 2.5
+    },
+    {
+      "actor_id": "hr_coordinator",
+      "name": null,
+      "hourly_cost": 30.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    }
+  ],
+  "node_overrides": [
+    {
+      "node_id": "resume_screen",
+      "name": null,
+      "base_duration_minutes": 12.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "phone_screen",
+      "name": null,
+      "base_duration_minutes": 25.0,
+      "actor_id": null,
+      "is_terminal": null
+    }
+  ],
+  "edge_overrides": [],
+  "workflow_metadata": null,
+  "notes": "High-growth environment means hiring managers have limited bandwidth. Resume screen volume is very high (500+/week).",
+  "limitations": [
+    "AI bias risk is elevated at high volumes; human oversight required.",
+    "Quality of hire metric not captured in this model."
+  ],
+  "created_by": "consulting-team",
+  "version": "1.0"
+}

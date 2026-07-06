@@ -1,0 +1,72 @@
+{
+  "base_scenario_slug": "insurance-claims-intake",
+  "configured_slug": "insurance-claims-high-volume-carrier",
+  "configured_name": "Insurance Claims \u2014 High-Volume National Carrier",
+  "client_name": "National Indemnity Group",
+  "description": "Calibrated for a top-10 P&C carrier processing 5,000+ claims/month with specialized adjuster roles.",
+  "profile_name": "base",
+  "actor_overrides": [
+    {
+      "actor_id": "claims_adjuster",
+      "name": null,
+      "hourly_cost": 48.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.03,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "senior_adjuster",
+      "name": null,
+      "hourly_cost": 72.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.015,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "fraud_analyst",
+      "name": null,
+      "hourly_cost": 65.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    }
+  ],
+  "node_overrides": [
+    {
+      "node_id": "fnol_receipt",
+      "name": null,
+      "base_duration_minutes": 18.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "coverage_verification",
+      "name": null,
+      "base_duration_minutes": 22.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "adjudication",
+      "name": null,
+      "base_duration_minutes": 35.0,
+      "actor_id": null,
+      "is_terminal": null
+    }
+  ],
+  "edge_overrides": [],
+  "workflow_metadata": null,
+  "notes": "Carrier has mature straight-through processing for 60% of simple claims. Fraud screening is a core competency.",
+  "limitations": [
+    "CAT surge volumes not modeled; add 2-3\u00d7 multiplier for catastrophe periods.",
+    "Subrogation and recovery workflows are separate."
+  ],
+  "created_by": "consulting-team",
+  "version": "1.0"
+}

@@ -1,0 +1,81 @@
+{
+  "base_scenario_slug": "healthcare-prior-authorization",
+  "configured_slug": "healthcare-prior-auth-small-plan",
+  "configured_name": "Healthcare Prior Auth \u2014 Small Regional Plan",
+  "client_name": "Acme Regional Health Plan",
+  "description": "Calibrated for a 200,000-member regional plan with lower labor costs and higher denial rates.",
+  "profile_name": "base",
+  "actor_overrides": [
+    {
+      "actor_id": "clinical_reviewer",
+      "name": null,
+      "hourly_cost": 62.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.06,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "medical_director",
+      "name": null,
+      "hourly_cost": 180.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": 5.0
+    },
+    {
+      "actor_id": "admin_staff",
+      "name": null,
+      "hourly_cost": 28.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    }
+  ],
+  "node_overrides": [
+    {
+      "node_id": "pa_intake",
+      "name": null,
+      "base_duration_minutes": 25.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "clinical_review",
+      "name": null,
+      "base_duration_minutes": 40.0,
+      "actor_id": null,
+      "is_terminal": null
+    }
+  ],
+  "edge_overrides": [
+    {
+      "source": "clinical_review",
+      "target": "decision_draft",
+      "probability": 0.5
+    },
+    {
+      "source": "clinical_review",
+      "target": "medical_director_review",
+      "probability": 0.4
+    },
+    {
+      "source": "clinical_review",
+      "target": "denied_standard",
+      "probability": 0.1
+    }
+  ],
+  "workflow_metadata": null,
+  "notes": "Clinical staff are generalists handling multiple administrative tasks; cycle times are longer than benchmark.",
+  "limitations": [
+    "Small plan may have fewer peer-to-peer review cases than modeled.",
+    "Staffing model assumes same-day processing; overnight batching not modeled."
+  ],
+  "created_by": "consulting-team",
+  "version": "1.0"
+}

@@ -1,0 +1,72 @@
+{
+  "base_scenario_slug": "procurement-vendor-onboarding",
+  "configured_slug": "procurement-vendor-onboarding-enterprise",
+  "configured_name": "Procurement Vendor Onboarding \u2014 Fortune 500 Enterprise",
+  "client_name": "GlobalCorp Operations",
+  "description": "Calibrated for a Fortune 500 with centralized procurement, robust compliance requirements, and high legal costs.",
+  "profile_name": "conservative",
+  "actor_overrides": [
+    {
+      "actor_id": "procurement_specialist",
+      "name": null,
+      "hourly_cost": 70.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "compliance_officer",
+      "name": null,
+      "hourly_cost": 100.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.02,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "legal_counsel",
+      "name": null,
+      "hourly_cost": 350.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": 3.0
+    }
+  ],
+  "node_overrides": [
+    {
+      "node_id": "vendor_application",
+      "name": null,
+      "base_duration_minutes": 35.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "legal_review",
+      "name": null,
+      "base_duration_minutes": 110.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "system_setup",
+      "name": null,
+      "base_duration_minutes": 75.0,
+      "actor_id": null,
+      "is_terminal": null
+    }
+  ],
+  "edge_overrides": [],
+  "workflow_metadata": null,
+  "notes": "Enterprise procurement has strict SOX and ESG compliance overlay. Legal review is the primary bottleneck.",
+  "limitations": [
+    "Multi-tier supplier risk assessment not modeled.",
+    "ESG questionnaire complexity varies by vendor category."
+  ],
+  "created_by": "consulting-team",
+  "version": "1.0"
+}

@@ -1,0 +1,65 @@
+{
+  "base_scenario_slug": "it-support-triage",
+  "configured_slug": "it-support-triage-managed-service",
+  "configured_name": "IT Support Triage \u2014 Managed Service Provider",
+  "client_name": "TechCare MSP",
+  "description": "Calibrated for an MSP serving 20 SMB clients with a 24/7 NOC, high ticket volume, and offshore L1 staff.",
+  "profile_name": "base",
+  "actor_overrides": [
+    {
+      "actor_id": "l1_agent",
+      "name": null,
+      "hourly_cost": 18.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.08,
+      "escalation_rate": null,
+      "available_hours_per_day": 8.0
+    },
+    {
+      "actor_id": "l2_engineer",
+      "name": null,
+      "hourly_cost": 45.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.04,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "l3_specialist",
+      "name": null,
+      "hourly_cost": 75.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": 5.0
+    }
+  ],
+  "node_overrides": [
+    {
+      "node_id": "incident_receipt",
+      "name": null,
+      "base_duration_minutes": 8.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "l1_resolution",
+      "name": null,
+      "base_duration_minutes": 20.0,
+      "actor_id": null,
+      "is_terminal": null
+    }
+  ],
+  "edge_overrides": [],
+  "workflow_metadata": null,
+  "notes": "Offshore L1 has lower cost but higher error rate due to language/context barriers. AI L1 replaces offshore, not onshore engineers.",
+  "limitations": [
+    "Language and localization overhead not modeled.",
+    "Client-specific SLA penalties not included in cost model."
+  ],
+  "created_by": "consulting-team",
+  "version": "1.0"
+}

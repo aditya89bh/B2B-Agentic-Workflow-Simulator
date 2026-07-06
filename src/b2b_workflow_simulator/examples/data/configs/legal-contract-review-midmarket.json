@@ -1,0 +1,72 @@
+{
+  "base_scenario_slug": "legal-contract-review",
+  "configured_slug": "legal-contract-review-midmarket",
+  "configured_name": "Legal Contract Review \u2014 Mid-Market SaaS",
+  "client_name": "SaaSCo Legal Ops",
+  "description": "Calibrated for a $50M ARR SaaS company with a 2-person legal team reviewing primarily SaaS subscription contracts.",
+  "profile_name": "base",
+  "actor_overrides": [
+    {
+      "actor_id": "paralegal",
+      "name": null,
+      "hourly_cost": 55.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": 0.06,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    },
+    {
+      "actor_id": "attorney",
+      "name": null,
+      "hourly_cost": 240.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": 4.5
+    },
+    {
+      "actor_id": "legal_ops",
+      "name": null,
+      "hourly_cost": 60.0,
+      "cost_per_execution": null,
+      "speed_multiplier": null,
+      "error_rate": null,
+      "escalation_rate": null,
+      "available_hours_per_day": null
+    }
+  ],
+  "node_overrides": [
+    {
+      "node_id": "paralegal_review",
+      "name": null,
+      "base_duration_minutes": 75.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "attorney_review",
+      "name": null,
+      "base_duration_minutes": 90.0,
+      "actor_id": null,
+      "is_terminal": null
+    },
+    {
+      "node_id": "negotiation",
+      "name": null,
+      "base_duration_minutes": 150.0,
+      "actor_id": null,
+      "is_terminal": null
+    }
+  ],
+  "edge_overrides": [],
+  "workflow_metadata": null,
+  "notes": "Most contracts are standard SaaS agreements with limited negotiation. AI first-pass dramatically reduces paralegal time.",
+  "limitations": [
+    "Non-standard enterprise contracts (MSA, custom SLAs) will require more attorney time.",
+    "Counterparty redline quality varies; modeled at average."
+  ],
+  "created_by": "consulting-team",
+  "version": "1.0"
+}
