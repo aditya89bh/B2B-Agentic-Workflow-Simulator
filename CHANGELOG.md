@@ -1,5 +1,66 @@
 # Changelog
 
+## Phase 7 — Visualization and Stakeholder Usability
+
+Adds the consulting output layer: every analytical result from Phases 1–6.5
+is now visible, explainable, and exportable as a stakeholder-ready artifact.
+
+- **Workflow graph visualization** (`visualization.py`): `to_mermaid` renders
+  a ``Workflow`` as a Mermaid LR flowchart (terminal nodes in stadium shape,
+  branch probabilities on edges, AI/human actor labels, entry node styled in
+  green).  `to_text` renders an indented ASCII graph.  `compare_text` and
+  `compare_mermaid` show structural diffs between before/after variants.
+  CLI: `visualize-workflow --format mermaid|text --variant before|after|compare`.
+
+- **ROI waterfall** (`waterfall.py`): `build_roi_waterfall` decomposes the
+  KPI delta into named bars (baseline cost, labor savings, wait-time savings,
+  failure reduction, implementation cost) with a ``net_roi`` subtotal.
+  `waterfall_to_text` and `waterfall_to_svg` render for CLI and file export.
+  CLI: `roi-waterfall --format text|svg --output path`.
+
+- **Bottleneck heatmap** (`heatmap.py`): `build_bottleneck_heatmap` scores
+  each workflow node across duration, wait, failure, and escalation pressure
+  (0–100 each, color-coded critical/high/moderate/low/minimal).  Shared
+  resource contention is included when a `SharedResourcePool` is provided.
+  CLI: `bottleneck-heatmap --format text|svg`.
+
+- **Executive snapshot** (`snapshot.py`): `build_snapshot` assembles a
+  concise one-page summary — decision headline, before/after KPI table, ROI,
+  top 3 bottlenecks, risks, and recommendations, explicit assumptions, and
+  next steps.  `snapshot_to_text` and `snapshot_to_html` render it.
+  CLI: `executive-snapshot --html-output`.
+
+- **Assumption profiles** (`assumptions.py`): `AssumptionProfile` captures all
+  simulation parameters (cases, seed, arrival interval, costs, multipliers,
+  engine, currency) in a JSON-serializable dataclass.  `save_assumption_profile`
+  / `load_assumption_profile` for file persistence.  Three sample profiles
+  shipped: `assumptions_base.json`, `assumptions_conservative.json`,
+  `assumptions_aggressive.json`.  `--assumptions path/to/profile.json` flag
+  wired into `roi-waterfall`, `bottleneck-heatmap`, `executive-snapshot`,
+  `consultant-packet`.
+
+- **Consultant packet** (`packet.py`): `generate_packet` creates a complete
+  10-file stakeholder directory in one call:
+  `README.md`, `executive_snapshot.txt`, `executive_snapshot.html`,
+  `workflow_before.mmd`, `workflow_after.mmd`, `roi_waterfall.svg`,
+  `bottleneck_heatmap.svg`, `assumptions.json`, `kpi_summary.json`,
+  `recommendations.txt`.  CLI: `consultant-packet --output-dir`.
+
+- **Example gallery** (`examples/outputs/`): Deterministic pre-generated
+  outputs for all three bundled examples.  CLI: `generate-example-gallery`.
+
+- **API reference** (`docs/api_reference.md`): Complete public API reference
+  covering all major classes and functions across Phases 1–7.
+
+- **Docs**: `docs/examples_gallery.md`, updated `docs/architecture.md`,
+  `docs/getting_started.md`, and `README.md` (added "What you can do in 5
+  minutes", "Who this is for", "When not to use this", "Limitations",
+  "Current status").
+
+- **Tests**: 131 new tests across 8 new test files covering all Phase 7
+  modules, CLI commands, assumption profiles, SVG escaping, determinism, and
+  API import paths.
+
 ## Phase 6.5 — Foundation Hardening
 
 Closes the architectural and correctness gaps identified in the Phase 6 engineering
