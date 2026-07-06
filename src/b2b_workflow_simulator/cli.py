@@ -1586,7 +1586,11 @@ def scenario_matrix_cmd(
 ) -> int:
     """Run scenario matrix comparison."""
     slugs = [scenario_slug] if scenario_slug else None
-    rows = build_scenario_matrix(profile_name=profile_name, scenario_slugs=slugs)
+    try:
+        rows = build_scenario_matrix(profile_name=profile_name, scenario_slugs=slugs)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     if fmt == "json":
         content = matrix_to_json(rows)
     else:
