@@ -125,6 +125,32 @@ ROI, SLA performance, compliance, policy violations, organizational risk,
 recommendations, and AI adoption -- into a single plain-text or HTML
 document (see `docs/ai_adoption.md`).
 
+Phase 6 lifts the entire model up to the **organizational level**. An
+**`Organization`** model records departments, teams, roles, reporting lines,
+and which workflows each team executes (see `docs/organization_model.md`). A
+**budget model** tracks departmental allocations across five categories
+(operating, implementation, AI tooling, hiring, training), records spend, and
+surfaces overruns (see `docs/budget_modeling.md`). A **shared resource pool**
+models resources shared across workflows -- legal reviewers, finance approvers,
+AI platforms, software tools, external vendors -- and computes contention ratios
+and overload risk for each (see `docs/shared_resources.md`). A
+**`CrossWorkflowSimulator`** runs multiple workflows against the same
+organization model simultaneously, producing a combined result covering all
+workflows at once. A **growth projection engine** generates a 12-month forward
+view of case volume, cost, headcount, budget, and capacity utilization,
+identifying the months where the organization breaks under current staffing
+assumptions (see `docs/org_growth_projection.md`). A **restructuring simulation
+engine** evaluates seven organizational design changes -- centralizing a team,
+decentralizing, adding shared services, outsourcing a stage, creating an AI ops
+team, hiring additional staff, or reducing approval layers -- projecting their
+cost, cycle-time, risk, staffing, and budget impacts (see
+`docs/restructuring_simulation.md`). An **organizational health score** combines
+all of the above into an eight-dimension composite score (0–100) with a letter
+grade and explainable factors per dimension (see `docs/org_health_score.md`).
+An **org-level executive report** assembles structure, KPIs, budget, shared
+resource contention, health score, growth risks, and restructuring
+recommendations into one plain-text or HTML document.
+
 ## Bundled examples
 
 ### Sales lead qualification
