@@ -2,8 +2,8 @@
 
 ``generate_case_study`` creates a structured directory for one scenario
 containing executive snapshots, ROI waterfalls, Mermaid diagrams, KPI
-JSON, and assumption files for all three assumption profiles (base,
-conservative, aggressive).
+JSON, assumption files, and consultant packet subdirectories for all
+three assumption profiles (base, conservative, aggressive).
 
 ``generate_all_case_studies`` iterates over every registered scenario.
 
@@ -18,6 +18,7 @@ from pathlib import Path
 from b2b_workflow_simulator.assumptions import apply_profile_to_workflow
 from b2b_workflow_simulator.heatmap import build_bottleneck_heatmap, heatmap_to_svg
 from b2b_workflow_simulator.kpi import KPIResult
+from b2b_workflow_simulator.packet import generate_packet
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.scenarios import ScenarioDefinition, list_scenarios
 from b2b_workflow_simulator.simulation import SimulationRunner
@@ -43,7 +44,13 @@ def _kpi_to_dict(kpi: KPIResult) -> dict:
 
 
 def _run_scenario_profile(scenario: ScenarioDefinition, profile_name: str):
-    """Run before/after for one scenario/profile and return (before_kpi, after_kpi, profile)."""
+    """Run before/after for one scenario/profile.
+
+    Returns ``(before_wf, after_wf, before_result, after_result, profile)``.
+    Both ``SimulationResult`` objects are returned (not just kpi) so callers
+    that need the full result (e.g. for consultant packet generation) can use
+    them directly.
+    """
     profiles = {
         "base": scenario.default_assumption_profile,
         "conservative": scenario.conservative_assumption_profile,
@@ -57,7 +64,7 @@ def _run_scenario_profile(scenario: ScenarioDefinition, profile_name: str):
     after_r = SimulationRunner(seed=profile.seed).run(
         after_wf, profile.num_cases, collect_events=False
     )
-    return before_wf, after_wf, before_r.kpi, after_r.kpi, profile
+    return before_wf, after_wf, before_r, after_r, profile
 
 
 def _build_scenario_readme(
@@ -121,6 +128,9 @@ def _build_scenario_readme(
         "| `kpi_summary_base.json` | Structured KPI output (base) |",
         "| `kpi_summary_conservative.json` | Structured KPI output (conservative) |",
         "| `kpi_summary_aggressive.json` | Structured KPI output (aggressive) |",
+        "| `consultant_packet_base/` | Complete consultant packet (base profile) |",
+        "| `consultant_packet_conservative/` | Complete consultant packet (conservative profile) |",
+        "| `consultant_packet_aggressive/` | Complete consultant packet (aggressive profile) |",
         "",
         "## Commands to reproduce",
         "",
@@ -144,6 +154,19 @@ def generate_case_study(
 ) -> dict[str, Path]:
     """Generate all case study files for ``scenario`` in ``output_dir``.
 
+    For each requested profile this creates:
+
+    - ``executive_snapshot_<profile>.txt``
+    - ``assumptions_<profile>.json``
+    - ``kpi_summary_<profile>.json``
+    - ``consultant_packet_<profile>/`` — a complete consultant packet directory
+
+    Plus these files shared across profiles (using the base profile):
+
+    - ``README.md``
+    - ``workflow_before.mmd``, ``workflow_after.mmd``
+    - ``roi_waterfall_base.svg``, ``bottleneck_heatmap_base.svg``
+
     Args:
         scenario: The scenario definition to generate outputs for.
         output_dir: Target directory (created if absent).
@@ -151,7 +174,7 @@ def generate_case_study(
             ``["base", "conservative", "aggressive"]``.
 
     Returns:
-        Dict mapping filename → Path for every file written.
+        Dict mapping filename/dirname → Path for every artifact written.
     """
     if profiles is None:
         profiles = ["base", "conservative", "aggressive"]
@@ -166,7 +189,11 @@ def generate_case_study(
         files[filename] = p
         return p
 
-    base_bwf, base_awf, base_bkpi, base_akpi, base_profile = _run_scenario_profile(scenario, "base")
+    base_bwf, base_awf, base_before_r, base_after_r, base_profile = (
+        _run_scenario_profile(scenario, "base")
+    )
+    base_bkpi = base_before_r.kpi
+    base_akpi = base_after_r.kpi
 
     write("workflow_before.mmd", to_mermaid(base_bwf))
     write("workflow_after.mmd", to_mermaid(base_awf))
@@ -184,17 +211,31 @@ def generate_case_study(
     write("README.md", _build_scenario_readme(scenario, base_bkpi, base_akpi))
 
     for profile_name in profiles:
-        bwf, awf, bkpi, akpi, profile = _run_scenario_profile(scenario, profile_name)
+        bwf, awf, before_r, after_r, profile = _run_scenario_profile(scenario, profile_name)
+        bkpi, akpi = before_r.kpi, after_r.kpi
+
         snap = build_snapshot(bkpi, akpi, implementation_cost=profile.implementation_cost)
         write(f"executive_snapshot_{profile_name}.txt", snapshot_to_text(snap))
         write(
             f"assumptions_{profile_name}.json",
             json.dumps(profile.to_dict(), indent=2) + "\n",
         )
-        write(f"kpi_summary_{profile_name}.json",
-              json.dumps(
-                  {"before": _kpi_to_dict(bkpi), "after": _kpi_to_dict(akpi)}, indent=2
-              ) + "\n")
+        write(
+            f"kpi_summary_{profile_name}.json",
+            json.dumps(
+                {"before": _kpi_to_dict(bkpi), "after": _kpi_to_dict(akpi)}, indent=2
+            ) + "\n",
+        )
+
+        packet_dir = output_dir / f"consultant_packet_{profile_name}"
+        generate_packet(
+            scenario.slug,
+            bwf, awf,
+            before_r, after_r,
+            profile,
+            packet_dir,
+        )
+        files[f"consultant_packet_{profile_name}"] = packet_dir
 
     return files
 
