@@ -321,12 +321,38 @@ Path("snap.html").write_text(snapshot_to_html(snapshot))
 
 ### Assumption profiles
 ```python
-from b2b_workflow_simulator.assumptions import AssumptionProfile, save_assumption_profile, load_assumption_profile
+from b2b_workflow_simulator.assumptions import (
+    AssumptionProfile, apply_profile_to_workflow,
+    save_assumption_profile, load_assumption_profile,
+)
 
-profile = AssumptionProfile(num_cases=500, seed=1, implementation_cost=10_000)
-save_assumption_profile(profile, "base.json")
-loaded = load_assumption_profile("base.json")
+profile = AssumptionProfile(
+    num_cases=500, seed=1, implementation_cost=10_000,
+    ai_error_rate_multiplier=2.0,   # doubles every AI agent's error_rate
+    ai_cost_multiplier=1.5,         # increases every AI agent's cost_per_execution by 50%
+    human_hourly_cost_multiplier=1.0,  # unchanged
+)
+
+# Apply multipliers to a workflow (returns a copy; original is not mutated)
+scaled_wf = apply_profile_to_workflow(workflow, profile)
+result = SimulationRunner(seed=profile.seed).run(scaled_wf, profile.num_cases)
+
+save_assumption_profile(profile, "conservative.json")
+loaded = load_assumption_profile("conservative.json")
 ```
+
+**How multipliers affect simulation:**
+
+| Multiplier | Applied to | Effect |
+|---|---|---|
+| `ai_error_rate_multiplier` | Every `AIAgentActor.error_rate` | `× multiplier` (capped at 1.0) |
+| `ai_cost_multiplier` | Every `AIAgentActor.cost_per_execution` | `× multiplier` |
+| `human_hourly_cost_multiplier` | Every `HumanActor.hourly_cost` and every `Worker.hourly_cost` in `ActorPool`s | `× multiplier` |
+
+All multipliers are applied via `apply_profile_to_workflow()`, which creates a new
+`Workflow` with scaled actors — the original workflow object is never mutated.
+The CLI applies multipliers automatically when `--assumptions` is passed to
+`roi-waterfall`, `bottleneck-heatmap`, `executive-snapshot`, and `consultant-packet`.
 
 ### Consultant packet
 ```python
