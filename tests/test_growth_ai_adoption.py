@@ -60,7 +60,8 @@ def test_no_ai_org_grows_with_increase_rate():
     proj = project_growth(org, None, cfg)
     assert proj.points[0].ai_adoption_level == pytest.approx(0.0)
     assert proj.points[1].ai_adoption_level == pytest.approx(0.10)
-    assert proj.points[11].ai_adoption_level == pytest.approx(1.0)  # month 12: 0+0.1*11=1.1 → capped
+    # month 12: 0+0.1*11=1.1 → capped at 1.0
+    assert proj.points[11].ai_adoption_level == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
