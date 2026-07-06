@@ -332,6 +332,63 @@ b2b-simulator org-restructure-scenario reduce_approval_layers --cases 200 --seed
 b2b-simulator org-executive-report --cases 200 --seed 42 --html-output org_exec.html
 ```
 
+## Phase 7 — Visualization and stakeholder output
+
+### Visualize a workflow
+
+```bash
+b2b-simulator visualize-workflow invoice-processing --format mermaid
+b2b-simulator visualize-workflow invoice-processing --format text
+```
+
+### ROI waterfall
+
+```bash
+b2b-simulator roi-waterfall invoice-processing --cases 300 --implementation-cost 8000
+b2b-simulator roi-waterfall invoice-processing --cases 300 --format svg --output roi.svg
+```
+
+### Bottleneck heatmap
+
+```bash
+b2b-simulator bottleneck-heatmap invoice-processing --cases 300 --arrival-interval 10
+b2b-simulator bottleneck-heatmap invoice-processing --format svg --output heatmap.svg
+```
+
+### Executive snapshot (one-page)
+
+```bash
+b2b-simulator executive-snapshot invoice-processing --cases 300 --implementation-cost 8000
+b2b-simulator executive-snapshot invoice-processing --html-output snap.html
+```
+
+### Consultant packet (all files at once)
+
+```bash
+b2b-simulator consultant-packet invoice-processing \
+  --cases 300 --implementation-cost 8000 --output-dir packet/
+```
+
+### Assumption profiles
+
+```bash
+# Use a conservative profile
+b2b-simulator executive-snapshot invoice-processing \
+  --assumptions src/b2b_workflow_simulator/examples/data/assumptions_conservative.json
+
+# Save your own profile
+cat > myprofile.json <<'EOF'
+{"num_cases": 500, "seed": 1, "implementation_cost": 12000, "description": "Board presentation"}
+EOF
+b2b-simulator executive-snapshot invoice-processing --assumptions myprofile.json
+```
+
+### Regenerate example gallery
+
+```bash
+b2b-simulator generate-example-gallery --output-dir examples/outputs
+```
+
 ## Running the test suite
 
 ```bash
