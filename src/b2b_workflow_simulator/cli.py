@@ -7,7 +7,11 @@ import sys
 from pathlib import Path
 
 from b2b_workflow_simulator.ai_adoption import assess_ai_adoption, generate_ai_adoption_report
-from b2b_workflow_simulator.assumptions import AssumptionProfile, load_assumption_profile
+from b2b_workflow_simulator.assumptions import (
+    AssumptionProfile,
+    apply_profile_to_workflow,
+    load_assumption_profile,
+)
 from b2b_workflow_simulator.capacity_planning import (
     DEFAULT_OVERLOAD_THRESHOLD,
     DEFAULT_TARGET_UTILIZATION,
@@ -1117,6 +1121,49 @@ def _load_profile(path: str | None) -> AssumptionProfile:
         raise SystemExit(1) from exc
 
 
+def _run_before_after_with_profile(
+    example_name: str,
+    profile: AssumptionProfile,
+    arrival_interval_minutes: float | None = None,
+    engine: str = "simple",
+    collect_events: bool = False,
+):
+    """Build and simulate both variants with profile multipliers applied.
+
+    Actor costs and error rates are scaled by the profile's multipliers
+    before the simulation runs.  The original workflow objects are not
+    mutated.  Returns the same 4-tuple as ``_run_before_after``, or
+    ``None`` on error.
+    """
+    if example_name not in EXAMPLES:
+        available = ", ".join(sorted(EXAMPLES))
+        print(
+            f"Unknown example '{example_name}'. Available: {available}",
+            file=sys.stderr,
+        )
+        return None
+
+    build_before, build_after = EXAMPLES[example_name]
+    before_workflow = apply_profile_to_workflow(build_before(), profile)
+    after_workflow = apply_profile_to_workflow(build_after(), profile)
+
+    before_result = SimulationRunner(seed=profile.seed).run(
+        before_workflow,
+        profile.num_cases,
+        arrival_interval_minutes=arrival_interval_minutes,
+        engine=engine,
+        collect_events=collect_events,
+    )
+    after_result = SimulationRunner(seed=profile.seed).run(
+        after_workflow,
+        profile.num_cases,
+        arrival_interval_minutes=arrival_interval_minutes,
+        engine=engine,
+        collect_events=collect_events,
+    )
+    return before_workflow, after_workflow, before_result, after_result
+
+
 def visualize_workflow(
     example_name: str, variant: str, fmt: str, output: str | None
 ) -> int:
@@ -1160,8 +1207,16 @@ def roi_waterfall(
         implementation_cost if implementation_cost is not None
         else profile.implementation_cost
     )
-
-    outcome = _run_before_after(example_name, effective_cases, effective_seed)
+    profile = AssumptionProfile(
+        num_cases=effective_cases, seed=effective_seed,
+        implementation_cost=effective_impl,
+        currency_label=profile.currency_label,
+        ai_error_rate_multiplier=profile.ai_error_rate_multiplier,
+        ai_cost_multiplier=profile.ai_cost_multiplier,
+        human_hourly_cost_multiplier=profile.human_hourly_cost_multiplier,
+        collect_events=False,
+    )
+    outcome = _run_before_after_with_profile(example_name, profile)
     if outcome is None:
         return 1
     _before_wf, _after_wf, before_result, after_result = outcome
@@ -1202,9 +1257,10 @@ def bottleneck_heatmap(
         else profile.arrival_interval_minutes
     )
 
-    workflow = _select_variant(example_name, variant)
-    if workflow is None:
+    raw_workflow = _select_variant(example_name, variant)
+    if raw_workflow is None:
         return 1
+    workflow = apply_profile_to_workflow(raw_workflow, profile)
     result = SimulationRunner(seed=effective_seed).run(
         workflow, effective_cases,
         arrival_interval_minutes=effective_interval,
@@ -1246,8 +1302,17 @@ def executive_snapshot(
         else profile.arrival_interval_minutes
     )
 
-    outcome = _run_before_after(
-        example_name, effective_cases, effective_seed,
+    profile = AssumptionProfile(
+        num_cases=effective_cases, seed=effective_seed,
+        implementation_cost=effective_impl,
+        arrival_interval_minutes=effective_interval,
+        ai_error_rate_multiplier=profile.ai_error_rate_multiplier,
+        ai_cost_multiplier=profile.ai_cost_multiplier,
+        human_hourly_cost_multiplier=profile.human_hourly_cost_multiplier,
+        collect_events=False,
+    )
+    outcome = _run_before_after_with_profile(
+        example_name, profile,
         arrival_interval_minutes=effective_interval,
     )
     if outcome is None:
@@ -1292,8 +1357,7 @@ def consultant_packet(
         collect_events=False,
     )
 
-    outcome = _run_before_after(example_name, effective_cases, effective_seed,
-                                collect_events=False)
+    outcome = _run_before_after_with_profile(example_name, profile)
     if outcome is None:
         return 1
     before_wf, after_wf, before_result, after_result = outcome
