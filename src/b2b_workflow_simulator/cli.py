@@ -82,6 +82,7 @@ from b2b_workflow_simulator.sensitivity_grid import (
     generate_sensitivity_grid_report,
     run_sensitivity_grid,
 )
+from b2b_workflow_simulator.shared_resources import RESOURCE_TYPE_LABELS
 from b2b_workflow_simulator.simulation import ENGINES, SimulationRunner
 from b2b_workflow_simulator.sla import evaluate_sla
 from b2b_workflow_simulator.workflow_io import load_workflow, save_workflow
@@ -851,11 +852,19 @@ def load_example(path: str, num_cases: int, seed: int | None) -> int:
 
 
 def _build_saas_cross_workflow_result(
-    num_cases: int, seed: int | None, arrival_interval: float | None
-):
-    """Build and run the bundled SaaS org cross-workflow simulation."""
+    num_cases: int,
+    seed: int | None,
+    arrival_interval: float | None,
+) -> tuple:
+    """Build and run the bundled SaaS org cross-workflow simulation.
+
+    Returns a ``(Organization, CrossWorkflowResult, SharedResourcePool)``
+    tuple.  The shared resource pool has contention usage already recorded
+    from the simulation run.
+    """
     org = build_saas_org()
-    sim = CrossWorkflowSimulator(org, seed=seed)
+    pool = build_saas_shared_resources()
+    sim = CrossWorkflowSimulator(org, seed=seed, shared_resource_pool=pool)
     sim.add_workflow(
         WorkflowRunConfig(
             workflow=sales_lead_qualification.build_after_workflow(),
@@ -880,12 +889,13 @@ def _build_saas_cross_workflow_result(
             dept_id="customer-success",
         )
     )
-    return org, sim.run()
+    result = sim.run()
+    return org, result, pool
 
 
 def run_org(num_cases: int, seed: int | None, arrival_interval: float | None) -> int:
     """Run the bundled B2B SaaS organizational simulation and print a KPI summary."""
-    org, result = _build_saas_cross_workflow_result(num_cases, seed, arrival_interval)
+    org, result, pool = _build_saas_cross_workflow_result(num_cases, seed, arrival_interval)
     print(f"Organization: {org.name}")
     print(f"Cases per workflow: {num_cases}")
     print(f"Total workflows: {len(result.workflow_ids)}")
@@ -907,11 +917,10 @@ def run_org(num_cases: int, seed: int | None, arrival_interval: float | None) ->
 
 def org_health(num_cases: int, seed: int | None, html_output: str | None) -> int:
     """Compute and display the organizational health score for the bundled SaaS org."""
-    org, result = _build_saas_cross_workflow_result(num_cases, seed, None)
+    org, result, pool = _build_saas_cross_workflow_result(num_cases, seed, None)
     org_budget = build_saas_org_budget()
-    shared_resources = build_saas_shared_resources()
     kpi_results = {wf_id: result.kpi_for(wf_id) for wf_id in result.workflow_ids}
-    health_score = compute_org_health(org, org_budget, shared_resources, kpi_results)
+    health_score = compute_org_health(org, org_budget, pool, kpi_results)
     print(generate_org_health_report(health_score))
     if html_output:
         Path(html_output).write_text(render_org_health_html(health_score))
@@ -945,12 +954,14 @@ def org_budget_analysis(html_output: str | None) -> int:
     return 0
 
 
-def org_resource_contention(days: int, html_output: str | None) -> int:
+def org_resource_contention(
+    days: int, num_cases: int, seed: int | None, html_output: str | None
+) -> int:
     """Print shared resource contention analysis for the bundled SaaS org."""
-    org = build_saas_org()
-    shared_resources = build_saas_shared_resources()
-    contentions = shared_resources.all_contentions(days=days)
+    org, result, pool = _build_saas_cross_workflow_result(num_cases, seed, None)
+    contentions = pool.all_contentions(days=days)
     print(f"Organization: {org.name}")
+    print(f"Cases simulated per workflow: {num_cases}")
     print(f"Reference period: {days} day(s)")
     print()
     if not contentions:
@@ -959,16 +970,21 @@ def org_resource_contention(days: int, html_output: str | None) -> int:
     print(f"{'Resource':<32}  {'Type':<18}  {'Ratio':>8}  {'Risk':>10}")
     print("-" * 74)
     for c in contentions:
-        res = shared_resources.resource(c.resource_id)
-        from b2b_workflow_simulator.shared_resources import RESOURCE_TYPE_LABELS
+        res = pool.resource(c.resource_id)
         type_label = RESOURCE_TYPE_LABELS.get(res.resource_type, res.resource_type)
         print(
             f"{c.resource_name:<32}  {type_label:<18}  "
             f"{c.contention_ratio:>8.2f}  {c.overload_risk.upper():>10}"
         )
-    bottlenecks = shared_resources.bottleneck_resources(days=days)
+    bottlenecks = pool.bottleneck_resources(days=days)
     if bottlenecks:
         print(f"\n{len(bottlenecks)} bottleneck resource(s) detected (demand > capacity).")
+    if html_output:
+        from b2b_workflow_simulator.html_report import render_org_executive_html
+        from b2b_workflow_simulator.org_report import OrgDigitalTwinReport
+        report = OrgDigitalTwinReport(org=org, shared_resources=pool)
+        Path(html_output).write_text(render_org_executive_html(report))
+        print(f"\nHTML report written to {html_output}")
     return 0
 
 
@@ -1004,7 +1020,7 @@ def org_restructure_scenario(scenario_type: str, num_cases: int, seed: int | Non
         available = ", ".join(sorted(SCENARIO_TYPES))
         print(f"Unknown scenario type '{scenario_type}'. Available: {available}", file=sys.stderr)
         return 1
-    org, result = _build_saas_cross_workflow_result(num_cases, seed, None)
+    org, result, pool = _build_saas_cross_workflow_result(num_cases, seed, None)
     kpi_results = {wf_id: result.kpi_for(wf_id) for wf_id in result.workflow_ids}
     org_budget = build_saas_org_budget()
     scenario = RestructuringScenario(
@@ -1021,11 +1037,10 @@ def org_executive_report(
     num_cases: int, seed: int | None, html_output: str | None
 ) -> int:
     """Generate a full organizational executive report for the bundled SaaS org."""
-    org, result = _build_saas_cross_workflow_result(num_cases, seed, None)
+    org, result, pool = _build_saas_cross_workflow_result(num_cases, seed, None)
     kpi_results = {wf_id: result.kpi_for(wf_id) for wf_id in result.workflow_ids}
     org_budget = build_saas_org_budget()
-    shared_resources = build_saas_shared_resources()
-    health_score = compute_org_health(org, org_budget, shared_resources, kpi_results)
+    health_score = compute_org_health(org, org_budget, pool, kpi_results)
 
     config = GrowthConfig(base_cases_per_month=num_cases, base_headcount=org.total_headcount())
     growth_projection = project_growth(org, org_budget, config)
@@ -1060,7 +1075,7 @@ def org_executive_report(
         org=org,
         kpi_results=kpi_results,
         org_budget=org_budget,
-        shared_resources=shared_resources,
+        shared_resources=pool,
         health_score=health_score,
         growth_projection=growth_projection,
         restructuring_impacts=restructuring_impacts,
@@ -1835,7 +1850,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     org_resource_parser = subparsers.add_parser(
         "org-resource-contention",
-        help="Print shared resource contention analysis for the bundled SaaS org.",
+        help="Simulate the SaaS org and print shared resource contention analysis.",
+    )
+    org_resource_parser.add_argument(
+        "--cases", type=int, default=200,
+        help="Number of cases to simulate per workflow (default: 200).",
+    )
+    org_resource_parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducible results (default: 42).",
     )
     org_resource_parser.add_argument(
         "--days", type=int, default=1,
@@ -1843,7 +1866,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     org_resource_parser.add_argument(
         "--html-output", default=None,
-        help="Reserved for future HTML output (currently unused).",
+        help="If set, write a static HTML org report including contention to this path.",
     )
 
     org_growth_parser = subparsers.add_parser(
@@ -2065,7 +2088,7 @@ def main(argv: list[str] | None = None) -> int:
         return org_budget_analysis(args.html_output)
 
     if args.command == "org-resource-contention":
-        return org_resource_contention(args.days, args.html_output)
+        return org_resource_contention(args.days, args.cases, args.seed, args.html_output)
 
     if args.command == "org-growth-projection":
         return org_growth_projection(
