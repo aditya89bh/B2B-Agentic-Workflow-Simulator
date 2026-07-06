@@ -1,5 +1,51 @@
 # Changelog
 
+## Phase 9 — Scenario Customization and Calibration Toolkit
+
+Adds a full customization and calibration layer so users can adapt any
+registered scenario to their organization without editing Python code.
+
+- **Scenario configuration model** (`scenario_config.py`): `ScenarioConfig`
+  dataclass with `ActorOverride`, `NodeOverride`, `EdgeOverride`,
+  `WorkflowMetadataOverride`.  `validate_scenario_config` checks all IDs,
+  probability sums, and value bounds.  `apply_scenario_config` builds
+  configured (before, after) workflows without mutating originals.
+  `load_scenario_config` / `save_scenario_config` for JSON persistence.
+
+- **6 sample configs** (`examples/data/configs/`): healthcare small-plan,
+  insurance high-volume carrier, HR startup, procurement enterprise,
+  legal mid-market, IT managed service — each with realistic actor/node
+  overrides and client-specific notes.
+
+- **Config diff** (`config_diff.py`): `build_config_diff` surfaces every
+  changed parameter between base and configured scenario, with high-risk
+  warnings when reductions exceed thresholds (>50% AI error reduction,
+  >70% AI cost reduction, >40% human cost reduction, etc.).
+  `config_diff_to_text` / `config_diff_to_json` for plain-text and JSON
+  output.
+
+- **Calibration questionnaire** (`calibration.py`): `build_calibration_template`
+  generates an 8-section structured questionnaire (volume, staffing, cycle
+  time, failure, escalation, compliance, AI readiness, implementation) for
+  any registered scenario.  `render_calibration_markdown` / `render_calibration_json`
+  for Markdown and JSON output.
+
+- **Configured case study** (`configured_case_study.py`):
+  `generate_configured_case_study` builds a complete client-specific
+  output directory with executive snapshot, Mermaid diagrams, ROI
+  waterfall, bottleneck heatmap, config JSON, config diff, KPI summary,
+  assumptions, and recommendations.  README includes validation warnings.
+
+- **9 new CLI commands**: `list-configs`, `validate-config`, `run-config`,
+  `compare-config`, `config-snapshot`, `config-packet`, `config-case-study`,
+  `config-diff`, `calibration-template`.
+
+- **Documentation**: `docs/scenario_customization.md`,
+  `docs/calibration_workflow.md`, `docs/config_schema.md`;
+  `README.md` updated with customization quick-start section.
+
+- **Tests**: 149 new tests across 6 new test files.
+
 ## Phase 8 — Industry Scenario Library and Consulting Case Studies
 
 Adds 8 new industry simulation scenarios, a central scenario registry, a

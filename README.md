@@ -9,6 +9,26 @@ This is not a toy agent demo. It is a modeling tool for answering a
 concrete question: *if we hand parts of this process to AI agents, does
 the workflow get better, break, or just change shape?*
 
+## Customize a scenario for your organization
+
+```bash
+# Generate calibration questionnaire
+b2b-simulator calibration-template it-support-triage --output calibration.md
+
+# Validate your config
+b2b-simulator validate-config my_config.json
+
+# See what changed from base
+b2b-simulator config-diff my_config.json
+
+# Run client-specific analysis
+b2b-simulator config-snapshot my_config.json
+b2b-simulator config-packet my_config.json --output-dir packet/
+b2b-simulator config-case-study my_config.json --output-dir case_study/
+```
+
+See `docs/scenario_customization.md` and `docs/config_schema.md` for details.
+
 ## Industry scenario library
 
 The simulator ships with **11 business scenarios** across 7 industries.
