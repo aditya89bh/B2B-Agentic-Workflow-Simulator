@@ -1,14 +1,71 @@
 # B2B Agentic Workflow Simulator
 
-An organizational digital twin for AI transformation. This project lets
-corporates, consultants, founders, and operations leaders simulate a
-business workflow **before** and **after** introducing AI agents, so the
-impact on cost, cycle time, capacity, quality, and failure modes can be
-understood before anything is built or deployed in production.
+An organizational digital twin for AI transformation. Simulate a business
+workflow **before** and **after** introducing AI agents, measure the ROI,
+surface the bottlenecks, and generate a stakeholder-ready deliverable — all
+from the command line, with no external services or databases.
 
 This is not a toy agent demo. It is a modeling tool for answering a
 concrete question: *if we hand parts of this process to AI agents, does
 the workflow get better, break, or just change shape?*
+
+## What you can do in 5 minutes
+
+```bash
+pip install -e ".[dev]"
+
+# Run a before/after comparison
+b2b-simulator run-example invoice-processing --cases 300
+
+# Generate a one-page executive snapshot
+b2b-simulator executive-snapshot invoice-processing --cases 300 --implementation-cost 8000
+
+# Get the full stakeholder packet in one command
+b2b-simulator consultant-packet invoice-processing --cases 300 --output-dir packet/
+
+# Visualize the workflow as a Mermaid diagram
+b2b-simulator visualize-workflow invoice-processing --format mermaid
+```
+
+## Who this is for
+
+- **Consultants** preparing AI transformation business cases for clients
+- **Operations leads** evaluating whether to automate a process
+- **Finance / procurement teams** estimating ROI before committing budget
+- **AI product teams** stress-testing assumptions before building
+
+## When not to use this
+
+- You need real-time operational monitoring (this is a static simulation tool)
+- Your process has complex state machines that can't be modeled as a DAG
+- You need sub-minute latency modeling (this works in minutes-scale)
+- You need a regulatory-certified risk model (treat outputs as directional estimates)
+
+## Limitations and assumptions
+
+- All cost and duration figures come from the workflow definition, not from
+  live operational data.  Validate them before presenting to stakeholders.
+- AI error rates and escalation rates are set by the model author — these are
+  the most sensitive assumptions.  Use the sensitivity sweep to see how much
+  they matter.
+- The simple engine approximates queueing for capacity-constrained scenarios;
+  use `--engine discrete` for more accurate contention modeling.
+- Phase 6 restructuring and health scores are analytical heuristics, not
+  re-run simulations.
+
+## Current status
+
+Phase 7 complete.  The repository contains a full simulation engine (Phases 1–4),
+a governance and decision-support layer (Phase 5), an organizational digital twin
+(Phase 6), and a visualization/consulting output layer (Phase 7).
+
+| Phase | What it adds |
+|---|---|
+| 1–4 | Core simulation, KPI, redesign, portfolio, sensitivity, Monte Carlo, capacity |
+| 5 | Policy, compliance, SLA, risk, recommendations, AI adoption, executive report |
+| 6 | Organization model, budgets, shared resources, growth projection, health score |
+| 6.5 | KPI-only mode, org-aware restructuring, health score wiring, CI, contributing |
+| 7 | Workflow visualization, ROI waterfall, bottleneck heatmap, executive snapshot, consultant packet, assumption profiles, example gallery, API reference |
 
 ## Why this exists
 
