@@ -15,17 +15,24 @@ from b2b_workflow_simulator.capacity_planning import (
     generate_capacity_report,
 )
 from b2b_workflow_simulator.compliance import evaluate_compliance, generate_compliance_report
+from b2b_workflow_simulator.cross_workflow import CrossWorkflowSimulator, WorkflowRunConfig
 from b2b_workflow_simulator.examples import (
     customer_support_ticket_resolution,
     governance,
     invoice_processing,
     sales_lead_qualification,
 )
+from b2b_workflow_simulator.examples.saas_org import (
+    build_saas_org,
+    build_saas_org_budget,
+    build_saas_shared_resources,
+)
 from b2b_workflow_simulator.executive_report import (
     build_executive_assessment,
     generate_executive_report,
 )
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
+from b2b_workflow_simulator.growth import GrowthConfig, generate_growth_report, project_growth
 from b2b_workflow_simulator.html_report import (
     render_ai_adoption_html,
     render_capacity_html,
@@ -33,6 +40,10 @@ from b2b_workflow_simulator.html_report import (
     render_diff_html,
     render_executive_html,
     render_monte_carlo_comparison_html,
+    render_org_budget_html,
+    render_org_executive_html,
+    render_org_growth_html,
+    render_org_health_html,
     render_policy_html,
     render_portfolio_html,
     render_recommendation_html,
@@ -44,6 +55,8 @@ from b2b_workflow_simulator.monte_carlo import (
     generate_monte_carlo_comparison_report,
     run_monte_carlo_comparison,
 )
+from b2b_workflow_simulator.org_health import compute_org_health, generate_org_health_report
+from b2b_workflow_simulator.org_report import OrgDigitalTwinReport, generate_org_digital_twin_report
 from b2b_workflow_simulator.policy import evaluate_policies, generate_policy_report
 from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
@@ -53,6 +66,12 @@ from b2b_workflow_simulator.recommendation import (
 )
 from b2b_workflow_simulator.redesign import compare_workflows
 from b2b_workflow_simulator.report import generate_portfolio_report, generate_report
+from b2b_workflow_simulator.restructuring import (
+    SCENARIO_TYPES,
+    RestructuringScenario,
+    compare_restructuring_scenarios,
+    generate_restructuring_report,
+)
 from b2b_workflow_simulator.risk import compute_risk, generate_risk_report
 from b2b_workflow_simulator.sensitivity import (
     PARAMETERS,
@@ -831,6 +850,230 @@ def load_example(path: str, num_cases: int, seed: int | None) -> int:
     return 0
 
 
+def _build_saas_cross_workflow_result(
+    num_cases: int, seed: int | None, arrival_interval: float | None
+):
+    """Build and run the bundled SaaS org cross-workflow simulation."""
+    org = build_saas_org()
+    sim = CrossWorkflowSimulator(org, seed=seed)
+    sim.add_workflow(
+        WorkflowRunConfig(
+            workflow=sales_lead_qualification.build_after_workflow(),
+            num_cases=num_cases,
+            arrival_interval_minutes=arrival_interval,
+            dept_id="sales",
+        )
+    )
+    sim.add_workflow(
+        WorkflowRunConfig(
+            workflow=invoice_processing.build_after_workflow(),
+            num_cases=num_cases,
+            arrival_interval_minutes=arrival_interval,
+            dept_id="finance",
+        )
+    )
+    sim.add_workflow(
+        WorkflowRunConfig(
+            workflow=customer_support_ticket_resolution.build_after_workflow(),
+            num_cases=num_cases,
+            arrival_interval_minutes=arrival_interval,
+            dept_id="customer-success",
+        )
+    )
+    return org, sim.run()
+
+
+def run_org(num_cases: int, seed: int | None, arrival_interval: float | None) -> int:
+    """Run the bundled B2B SaaS organizational simulation and print a KPI summary."""
+    org, result = _build_saas_cross_workflow_result(num_cases, seed, arrival_interval)
+    print(f"Organization: {org.name}")
+    print(f"Cases per workflow: {num_cases}")
+    print(f"Total workflows: {len(result.workflow_ids)}")
+    print(f"Total cases simulated: {result.total_cases}")
+    print(f"Total cost: ${result.total_cost:,.2f}")
+    print(f"Avg completion rate: {result.avg_completion_rate:.1%}")
+    print()
+    label_w = max(len(wf_id) for wf_id in result.workflow_ids)
+    print(f"{'Workflow':<{label_w}}  {'Completion':>12}  {'Cost/Case':>12}  {'Cycle (min)':>12}")
+    print("-" * (label_w + 42))
+    for wf_id in result.workflow_ids:
+        kpi = result.kpi_for(wf_id)
+        print(
+            f"{wf_id:<{label_w}}  {kpi.completion_rate:>12.1%}  "
+            f"${kpi.avg_cost_per_case:>11,.2f}  {kpi.avg_cycle_time_minutes:>12,.1f}"
+        )
+    return 0
+
+
+def org_health(num_cases: int, seed: int | None, html_output: str | None) -> int:
+    """Compute and display the organizational health score for the bundled SaaS org."""
+    org, result = _build_saas_cross_workflow_result(num_cases, seed, None)
+    org_budget = build_saas_org_budget()
+    shared_resources = build_saas_shared_resources()
+    kpi_results = {wf_id: result.kpi_for(wf_id) for wf_id in result.workflow_ids}
+    health_score = compute_org_health(org, org_budget, shared_resources, kpi_results)
+    print(generate_org_health_report(health_score))
+    if html_output:
+        Path(html_output).write_text(render_org_health_html(health_score))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def org_budget_analysis(html_output: str | None) -> int:
+    """Print the budget analysis for the bundled B2B SaaS organization."""
+    org = build_saas_org()
+    org_budget = build_saas_org_budget()
+    print(f"Organization: {org.name}")
+    print(f"Total annual budget: ${org_budget.total_budget:,.0f}")
+    print(f"Overall utilization: {org_budget.overall_utilization:.1%}")
+    print()
+    print(f"{'Department':<30}  {'Budget':>12}  {'Spent':>12}  {'Util':>8}  {'Status':>8}")
+    print("-" * 76)
+    for dept_id, budget in org_budget.dept_budgets.items():
+        try:
+            dept_name = org.get_department(dept_id).name
+        except KeyError:
+            dept_name = dept_id
+        status = "OVERRUN" if budget.has_overrun else "OK"
+        print(
+            f"{dept_name:<30}  ${budget.annual_budget:>11,.0f}  "
+            f"${budget.total_spent:>11,.0f}  {budget.utilization:>7.1%}  {status:>8}"
+        )
+    if html_output:
+        Path(html_output).write_text(render_org_budget_html(org, org_budget))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def org_resource_contention(days: int, html_output: str | None) -> int:
+    """Print shared resource contention analysis for the bundled SaaS org."""
+    org = build_saas_org()
+    shared_resources = build_saas_shared_resources()
+    contentions = shared_resources.all_contentions(days=days)
+    print(f"Organization: {org.name}")
+    print(f"Reference period: {days} day(s)")
+    print()
+    if not contentions:
+        print("No shared resources registered.")
+        return 0
+    print(f"{'Resource':<32}  {'Type':<18}  {'Ratio':>8}  {'Risk':>10}")
+    print("-" * 74)
+    for c in contentions:
+        res = shared_resources.resource(c.resource_id)
+        from b2b_workflow_simulator.shared_resources import RESOURCE_TYPE_LABELS
+        type_label = RESOURCE_TYPE_LABELS.get(res.resource_type, res.resource_type)
+        print(
+            f"{c.resource_name:<32}  {type_label:<18}  "
+            f"{c.contention_ratio:>8.2f}  {c.overload_risk.upper():>10}"
+        )
+    bottlenecks = shared_resources.bottleneck_resources(days=days)
+    if bottlenecks:
+        print(f"\n{len(bottlenecks)} bottleneck resource(s) detected (demand > capacity).")
+    return 0
+
+
+def org_growth_projection(
+    monthly_growth_rate: float,
+    base_cases: int,
+    base_headcount: int,
+    headcount_growth: float,
+    ai_adoption_rate: float,
+    html_output: str | None,
+) -> int:
+    """Project 12-month growth for the bundled B2B SaaS organization."""
+    org = build_saas_org()
+    org_budget = build_saas_org_budget()
+    config = GrowthConfig(
+        monthly_growth_rate=monthly_growth_rate,
+        base_cases_per_month=base_cases,
+        base_headcount=base_headcount,
+        headcount_growth_rate=headcount_growth,
+        ai_adoption_increase_rate=ai_adoption_rate,
+    )
+    projection = project_growth(org, org_budget, config)
+    print(generate_growth_report(projection))
+    if html_output:
+        Path(html_output).write_text(render_org_growth_html(projection))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def org_restructure_scenario(scenario_type: str, num_cases: int, seed: int | None) -> int:
+    """Evaluate a restructuring scenario for the bundled B2B SaaS organization."""
+    if scenario_type not in SCENARIO_TYPES:
+        available = ", ".join(sorted(SCENARIO_TYPES))
+        print(f"Unknown scenario type '{scenario_type}'. Available: {available}", file=sys.stderr)
+        return 1
+    org, result = _build_saas_cross_workflow_result(num_cases, seed, None)
+    kpi_results = {wf_id: result.kpi_for(wf_id) for wf_id in result.workflow_ids}
+    org_budget = build_saas_org_budget()
+    scenario = RestructuringScenario(
+        scenario_id="cli-scenario",
+        scenario_type=scenario_type,
+        description=f"Evaluate '{scenario_type}' for {org.name}",
+    )
+    impacts = compare_restructuring_scenarios(org, kpi_results, [scenario], org_budget)
+    print(generate_restructuring_report(impacts))
+    return 0
+
+
+def org_executive_report(
+    num_cases: int, seed: int | None, html_output: str | None
+) -> int:
+    """Generate a full organizational executive report for the bundled SaaS org."""
+    org, result = _build_saas_cross_workflow_result(num_cases, seed, None)
+    kpi_results = {wf_id: result.kpi_for(wf_id) for wf_id in result.workflow_ids}
+    org_budget = build_saas_org_budget()
+    shared_resources = build_saas_shared_resources()
+    health_score = compute_org_health(org, org_budget, shared_resources, kpi_results)
+
+    config = GrowthConfig(base_cases_per_month=num_cases, base_headcount=org.total_headcount())
+    growth_projection = project_growth(org, org_budget, config)
+
+    from b2b_workflow_simulator.restructuring import (
+        CREATE_AI_OPS_TEAM,
+        HIRE_ADDITIONAL_STAFF,
+        REDUCE_APPROVAL_LAYERS,
+    )
+    scenarios = [
+        RestructuringScenario(
+            scenario_id="s1",
+            scenario_type=CREATE_AI_OPS_TEAM,
+            description="Create a dedicated AI Operations team",
+        ),
+        RestructuringScenario(
+            scenario_id="s2",
+            scenario_type=HIRE_ADDITIONAL_STAFF,
+            description="Hire additional CS agents",
+            parameters={"headcount_delta": 2},
+        ),
+        RestructuringScenario(
+            scenario_id="s3",
+            scenario_type=REDUCE_APPROVAL_LAYERS,
+            description="Reduce approval layers in invoice processing",
+            parameters={"approval_layers_removed": 1},
+        ),
+    ]
+    restructuring_impacts = compare_restructuring_scenarios(org, kpi_results, scenarios, org_budget)
+
+    report = OrgDigitalTwinReport(
+        org=org,
+        kpi_results=kpi_results,
+        org_budget=org_budget,
+        shared_resources=shared_resources,
+        health_score=health_score,
+        growth_projection=growth_projection,
+        restructuring_impacts=restructuring_impacts,
+        cross_workflow_result=result,
+    )
+    print(generate_org_digital_twin_report(report))
+
+    if html_output:
+        Path(html_output).write_text(render_org_executive_html(report))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="b2b-simulator",
@@ -1547,6 +1790,126 @@ def build_parser() -> argparse.ArgumentParser:
         help="If set, also write a static HTML executive report to this path.",
     )
 
+    run_org_parser = subparsers.add_parser(
+        "run-org",
+        help="Run the bundled B2B SaaS org simulation and print a KPI summary.",
+    )
+    run_org_parser.add_argument(
+        "--cases", type=int, default=200,
+        help="Number of cases to simulate per workflow (default: 200).",
+    )
+    run_org_parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    run_org_parser.add_argument(
+        "--arrival-interval", type=float, default=None,
+        help="Minutes between case arrivals; enables capacity-aware queueing.",
+    )
+
+    org_health_parser = subparsers.add_parser(
+        "org-health",
+        help="Compute and display the organizational health score for the bundled SaaS org.",
+    )
+    org_health_parser.add_argument(
+        "--cases", type=int, default=200,
+        help="Number of cases to simulate per workflow (default: 200).",
+    )
+    org_health_parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    org_health_parser.add_argument(
+        "--html-output", default=None,
+        help="If set, also write a static HTML health report to this path.",
+    )
+
+    org_budget_parser = subparsers.add_parser(
+        "org-budget-analysis",
+        help="Print the budget analysis for the bundled B2B SaaS organization.",
+    )
+    org_budget_parser.add_argument(
+        "--html-output", default=None,
+        help="If set, also write a static HTML budget report to this path.",
+    )
+
+    org_resource_parser = subparsers.add_parser(
+        "org-resource-contention",
+        help="Print shared resource contention analysis for the bundled SaaS org.",
+    )
+    org_resource_parser.add_argument(
+        "--days", type=int, default=1,
+        help="Reference period in working days for contention analysis (default: 1).",
+    )
+    org_resource_parser.add_argument(
+        "--html-output", default=None,
+        help="Reserved for future HTML output (currently unused).",
+    )
+
+    org_growth_parser = subparsers.add_parser(
+        "org-growth-projection",
+        help="Project 12-month growth for the bundled B2B SaaS organization.",
+    )
+    org_growth_parser.add_argument(
+        "--monthly-growth-rate", type=float, default=0.05,
+        help="Monthly case volume growth rate as a decimal (default: 0.05 = 5%%).",
+    )
+    org_growth_parser.add_argument(
+        "--base-cases", type=int, default=200,
+        help="Base case volume per month (default: 200).",
+    )
+    org_growth_parser.add_argument(
+        "--base-headcount", type=int, default=18,
+        help="Starting headcount (default: 18).",
+    )
+    org_growth_parser.add_argument(
+        "--headcount-growth", type=float, default=0.0,
+        help="Monthly headcount growth rate (default: 0.0).",
+    )
+    org_growth_parser.add_argument(
+        "--ai-adoption-rate", type=float, default=0.02,
+        help="Monthly AI adoption increase (default: 0.02 = +2 pp/month).",
+    )
+    org_growth_parser.add_argument(
+        "--html-output", default=None,
+        help="If set, also write a static HTML growth report to this path.",
+    )
+
+    org_restructure_parser = subparsers.add_parser(
+        "org-restructure-scenario",
+        help="Evaluate a restructuring scenario for the bundled B2B SaaS organization.",
+    )
+    org_restructure_parser.add_argument(
+        "scenario_type",
+        choices=sorted(SCENARIO_TYPES),
+        help="Type of restructuring scenario to evaluate.",
+    )
+    org_restructure_parser.add_argument(
+        "--cases", type=int, default=200,
+        help="Number of cases to simulate per workflow for baseline (default: 200).",
+    )
+    org_restructure_parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+
+    org_executive_parser = subparsers.add_parser(
+        "org-executive-report",
+        help="Generate a full organizational executive report for the bundled SaaS org.",
+    )
+    org_executive_parser.add_argument(
+        "--cases", type=int, default=200,
+        help="Number of cases to simulate per workflow (default: 200).",
+    )
+    org_executive_parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Random seed for reproducible results (default: 42).",
+    )
+    org_executive_parser.add_argument(
+        "--html-output", default=None,
+        help="If set, also write a static HTML executive report to this path.",
+    )
+
     return parser
 
 
@@ -1691,6 +2054,34 @@ def main(argv: list[str] | None = None) -> int:
             args.arrival_interval,
             args.html_output,
         )
+
+    if args.command == "run-org":
+        return run_org(args.cases, args.seed, args.arrival_interval)
+
+    if args.command == "org-health":
+        return org_health(args.cases, args.seed, args.html_output)
+
+    if args.command == "org-budget-analysis":
+        return org_budget_analysis(args.html_output)
+
+    if args.command == "org-resource-contention":
+        return org_resource_contention(args.days, args.html_output)
+
+    if args.command == "org-growth-projection":
+        return org_growth_projection(
+            args.monthly_growth_rate,
+            args.base_cases,
+            args.base_headcount,
+            args.headcount_growth,
+            args.ai_adoption_rate,
+            args.html_output,
+        )
+
+    if args.command == "org-restructure-scenario":
+        return org_restructure_scenario(args.scenario_type, args.cases, args.seed)
+
+    if args.command == "org-executive-report":
+        return org_executive_report(args.cases, args.seed, args.html_output)
 
     parser.print_help()
     return 1
