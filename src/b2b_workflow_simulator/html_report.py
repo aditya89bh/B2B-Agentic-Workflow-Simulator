@@ -21,6 +21,7 @@ from b2b_workflow_simulator.capacity_planning import (
 )
 from b2b_workflow_simulator.compliance import ComplianceReport
 from b2b_workflow_simulator.executive_report import ExecutiveAssessment
+from b2b_workflow_simulator.growth import GrowthProjection
 from b2b_workflow_simulator.monte_carlo import (
     COMPARISON_METRICS,
     KPI_METRICS,
@@ -32,6 +33,9 @@ from b2b_workflow_simulator.monte_carlo import (
     build_variability_summary,
     format_stat_value,
 )
+from b2b_workflow_simulator.org_health import OrgHealthScore
+from b2b_workflow_simulator.org_model import Organization
+from b2b_workflow_simulator.org_report import OrgDigitalTwinReport
 from b2b_workflow_simulator.policy import SEVERITY_ERROR, PolicyEvaluation
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.recommendation import RecommendationSet
@@ -830,19 +834,278 @@ def render_executive_html(assessment: ExecutiveAssessment) -> str:
     return _page(f"{assessment.workflow_name} - Executive Assessment", body)
 
 
+def _health_factor_row(factor) -> str:
+    score = factor.score
+    if score >= 80:
+        css = "region-safe"
+    elif score >= 60:
+        css = ""
+    else:
+        css = "region-negative"
+    return (
+        "<tr>"
+        f"<td>{_escape(factor.name)}</td>"
+        f'<td class="{css}">{score:.1f}/100</td>'
+        f"<td>{_escape(factor.explanation)}</td>"
+        "</tr>"
+    )
+
+
+def render_org_health_html(health_score: OrgHealthScore) -> str:
+    """Render an ``OrgHealthScore`` as a standalone HTML report."""
+    rows = "".join(
+        _health_factor_row(f) for f in sorted(health_score.factors, key=lambda f: f.score)
+    )
+    top_risks = "".join(
+        f"<li>{_escape(r.name)}: {r.score:.1f}/100 — {_escape(r.explanation)}</li>"
+        for r in health_score.top_risks(3)
+    )
+    body = f"""
+  <h1>Organizational Health Score</h1>
+  <p class="subtitle">{_escape(health_score.org_name)}</p>
+
+  <p class="callout"><strong>Overall score: {health_score.overall_score:.1f}/100
+  &nbsp; Grade: {_escape(health_score.grade)}</strong></p>
+  <p>{_escape(health_score.summary)}</p>
+
+  <h2>Dimension Scores</h2>
+  <table>
+    <tr><th>Dimension</th><th>Score</th><th>Explanation</th></tr>
+    {rows}
+  </table>
+
+  <h2>Top Risks</h2>
+  <ul>{top_risks}</ul>
+"""
+    return _page(f"{health_score.org_name} - Org Health Score", body)
+
+
+def render_org_budget_html(org: Organization, org_budget) -> str:
+    """Render an ``OrgBudget`` as a standalone HTML budget analysis report."""
+    dept_rows = []
+    for dept_id, budget in org_budget.dept_budgets.items():
+        try:
+            dept_name = org.get_department(dept_id).name
+        except KeyError:
+            dept_name = dept_id
+        if budget.has_overrun:
+            css = "region-negative"
+        elif budget.utilization < 0.85:
+            css = "region-safe"
+        else:
+            css = ""
+        dept_rows.append(
+            "<tr>"
+            f"<td>{_escape(dept_name)}</td>"
+            f"<td>${budget.annual_budget:,.0f}</td>"
+            f"<td>${budget.total_spent:,.0f}</td>"
+            f'<td class="{css}">{budget.utilization:.1%}</td>'
+            f"<td>{'OVERRUN' if budget.has_overrun else 'OK'}</td>"
+            "</tr>"
+        )
+    body = f"""
+  <h1>Organization Budget Analysis</h1>
+  <p class="subtitle">{_escape(org.name)}</p>
+
+  <p class="callout">
+    <strong>Total budget: ${org_budget.total_budget:,.0f}</strong>
+    &nbsp;&mdash;&nbsp; Spent: ${org_budget.total_spent:,.0f}
+    &nbsp;&mdash;&nbsp; Utilization: {org_budget.overall_utilization:.1%}
+  </p>
+
+  <h2>Department Budgets</h2>
+  <table>
+    <tr><th>Department</th><th>Annual Budget</th><th>Spent</th>
+    <th>Utilization</th><th>Status</th></tr>
+    {"".join(dept_rows)}
+  </table>
+"""
+    return _page(f"{org.name} - Budget Analysis", body)
+
+
+def render_org_growth_html(projection: GrowthProjection) -> str:
+    """Render a ``GrowthProjection`` as a standalone HTML growth report."""
+    rows = []
+    for p in projection.points:
+        css = "region-negative" if p.is_breaking_point else ""
+        rows.append(
+            "<tr>"
+            f"<td>{p.month}</td>"
+            f"<td>{p.projected_cases:,}</td>"
+            f"<td>${p.projected_cost:,.0f}</td>"
+            f"<td>{p.projected_headcount:.1f}</td>"
+            f'<td class="{css}">{p.capacity_utilization:.1%}</td>'
+            f"<td>{p.ai_adoption_level:.1%}</td>"
+            f"<td>{_escape('BREAK' if p.is_breaking_point else '')}</td>"
+            "</tr>"
+        )
+    first_bp = projection.first_breaking_point()
+    bp_callout = (
+        f'<p class="callout"><strong>Breaking point at month {first_bp.month}:</strong> '
+        f"{_escape(first_bp.breaking_point_reason or '')}</p>"
+        if first_bp
+        else "<p>No breaking points detected within 12-month horizon.</p>"
+    )
+    body = f"""
+  <h1>Growth Projection</h1>
+  <p class="subtitle">{_escape(projection.org_name)} &mdash;
+  {projection.config.monthly_growth_rate:.1%}/month growth</p>
+
+  {bp_callout}
+
+  <h2>Monthly Forecast</h2>
+  <table>
+    <tr><th>Month</th><th>Cases</th><th>Cost</th><th>Headcount</th>
+    <th>Cap. Util.</th><th>AI Adopt.</th><th>Status</th></tr>
+    {"".join(rows)}
+  </table>
+"""
+    return _page(f"{projection.org_name} - Growth Projection", body)
+
+
+def _bp_callout(first_bp) -> str:
+    if first_bp is None:
+        return "<p>No breaking points within 12-month horizon.</p>"
+    return (
+        f"<p class='callout'><strong>Breaking point at month {first_bp.month}:</strong> "
+        f"{_escape(first_bp.breaking_point_reason or '')}</p>"
+    )
+
+
+def render_org_executive_html(report: OrgDigitalTwinReport) -> str:
+    """Render an ``OrgDigitalTwinReport`` as a single standalone HTML document."""
+    org = report.org
+
+    dept_rows = "".join(
+        f"<tr><td>{_escape(d.name)}</td><td>{org.department_headcount(d.dept_id)}</td>"
+        f"<td>{len(org.teams_for_department(d.dept_id))}</td></tr>"
+        for d in org.departments.values()
+    )
+
+    kpi_rows = "".join(
+        f"<tr><td>{_escape(wf_id)}</td><td>{kpi.completion_rate:.1%}</td>"
+        f"<td>${kpi.avg_cost_per_case:,.2f}</td><td>{kpi.avg_cycle_time_minutes:,.0f} min</td></tr>"
+        for wf_id, kpi in report.kpi_results.items()
+    ) if report.kpi_results else "<tr><td colspan='4'>No simulation results.</td></tr>"
+
+    health_section = ""
+    if report.health_score is not None:
+        hs = report.health_score
+        health_section = f"""
+  <h2>Organizational Health</h2>
+  <p class="callout"><strong>Score: {hs.overall_score:.1f}/100 &nbsp; Grade: {_escape(hs.grade)}
+  </strong></p>
+  <p>{_escape(hs.summary)}</p>
+"""
+
+    budget_section = ""
+    if report.org_budget is not None:
+        ob = report.org_budget
+        budget_section = f"""
+  <h2>Budget Summary</h2>
+  <ul>
+    <li>Total budget: ${ob.total_budget:,.0f}</li>
+    <li>Total spent: ${ob.total_spent:,.0f}</li>
+    <li>Utilization: {ob.overall_utilization:.1%}</li>
+  </ul>
+"""
+
+    resource_section = ""
+    if report.shared_resources is not None:
+        contentions = report.shared_resources.all_contentions()[:5]
+        c_rows = "".join(
+            f"<tr><td>{_escape(c.resource_name)}</td><td>{c.contention_ratio:.2f}</td>"
+            f'<td class="{"region-negative" if c.is_bottleneck else ""}">'
+            f"{_escape(c.overload_risk.upper())}</td></tr>"
+            for c in contentions
+        )
+        resource_section = f"""
+  <h2>Shared Resource Contention</h2>
+  <table>
+    <tr><th>Resource</th><th>Contention Ratio</th><th>Risk</th></tr>
+    {c_rows}
+  </table>
+"""
+
+    restructuring_section = ""
+    if report.restructuring_impacts:
+        r_rows = "".join(
+            f"<tr><td>{_escape(i.scenario.description[:50])}</td>"
+            f'<td class="{"region-safe" if i.is_cost_positive else "region-negative"}">'
+            f"${i.cost_impact:+,.0f}</td>"
+            f'<td class="{"region-safe" if i.is_risk_positive else "region-negative"}">'
+            f"{i.risk_delta:+.1f}</td>"
+            f"<td>{i.staffing_delta:+d}</td></tr>"
+            for i in report.restructuring_impacts[:5]
+        )
+        restructuring_section = f"""
+  <h2>Restructuring Scenarios</h2>
+  <table>
+    <tr><th>Scenario</th><th>Cost Impact</th><th>Risk Delta</th><th>Headcount Delta</th></tr>
+    {r_rows}
+  </table>
+"""
+
+    growth_section = ""
+    if report.growth_projection is not None:
+        gp = report.growth_projection
+        first_bp = gp.first_breaking_point()
+        growth_section = f"""
+  <h2>Growth Projection</h2>
+  <p>Base: {gp.config.base_cases_per_month} cases/month,
+  growing at {gp.config.monthly_growth_rate:.1%}/month.</p>
+  {_bp_callout(first_bp)}
+"""
+
+    body = f"""
+  <h1>Organizational Digital Twin Report</h1>
+  <p class="subtitle">{_escape(org.name)}</p>
+
+  <h2>Structure</h2>
+  <ul>
+    <li>Departments: {len(org.departments)}</li>
+    <li>Teams: {len(org.teams)}</li>
+    <li>Roles: {org.total_headcount()} ({org.ai_agent_count()} AI agents,
+    {org.manager_count()} managers)</li>
+    <li>Workflows: {len(org.workflow_ids)}</li>
+  </ul>
+  <table>
+    <tr><th>Department</th><th>Headcount</th><th>Teams</th></tr>
+    {dept_rows}
+  </table>
+
+  <h2>Workflow Results</h2>
+  <table>
+    <tr><th>Workflow</th><th>Completion Rate</th><th>Cost/Case</th><th>Avg Cycle Time</th></tr>
+    {kpi_rows}
+  </table>
+
+  {health_section}
+  {budget_section}
+  {resource_section}
+  {restructuring_section}
+  {growth_section}
+"""
+    return _page(f"{org.name} - Digital Twin Report", body)
+
+
 __all__ = [
-    "render_diff_html",
-    "render_portfolio_html",
-    "render_monte_carlo_html",
-    "render_monte_carlo_comparison_html",
-    "render_sensitivity_grid_html",
-    "render_capacity_html",
-    "render_hiring_html",
-    "render_policy_html",
-    "render_compliance_html",
-    "render_sla_html",
-    "render_risk_html",
-    "render_recommendation_html",
     "render_ai_adoption_html",
+    "render_capacity_html",
+    "render_compliance_html",
+    "render_diff_html",
     "render_executive_html",
+    "render_hiring_html",
+    "render_monte_carlo_comparison_html",
+    "render_monte_carlo_html",
+    "render_org_budget_html",
+    "render_org_executive_html",
+    "render_org_growth_html",
+    "render_org_health_html",
+    "render_policy_html",
+    "render_portfolio_html",
+    "render_recommendation_html",
+    "render_risk_html",
+    "render_sensitivity_grid_html",
+    "render_sla_html",
 ]

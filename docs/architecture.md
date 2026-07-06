@@ -368,6 +368,40 @@ recommendations, and AI adoption -- the same underlying data every other
 report type in this codebase renders, assembled into the one document an
 executive sponsor actually needs to read. See `docs/ai_adoption.md`.
 
+## Phase 6: Organizational digital twin layer
+
+Phase 6 adds an org-level layer that sits above individual workflows:
+
+```
+org_model.py          Organization, Department, Team, Role, ReportingLine, OrgUnit
+budget.py             BudgetAllocation, DepartmentBudget, OrgBudget
+shared_resources.py   SharedResource, ResourceContention, SharedResourcePool
+cross_workflow.py     CrossWorkflowSimulator: run multiple workflows against one org
+restructuring.py      RestructuringScenario, evaluate_restructuring (7 scenario types)
+growth.py             GrowthConfig, GrowthProjection: 12-month demand forecasting
+org_health.py         OrgHealthScore: 8-dimension composite health score with grades
+org_report.py         OrgDigitalTwinReport, generate_org_digital_twin_report
+examples/saas_org.py  Bundled B2B SaaS org (6 depts, 6 teams, 18 roles, 3 workflows)
+```
+
+HTML renderers added to `html_report.py`: `render_org_health_html`,
+`render_org_budget_html`, `render_org_growth_html`, `render_org_executive_html`.
+
+CLI commands added: `run-org`, `org-health`, `org-budget-analysis`,
+`org-resource-contention`, `org-growth-projection`, `org-restructure-scenario`,
+`org-executive-report`.
+
+Dependency order within Phase 6:
+
+1. `org_model` (no Phase 6 deps)
+2. `budget` (no Phase 6 deps)
+3. `shared_resources` (no Phase 6 deps)
+4. `cross_workflow` → `org_model`, `simulation`
+5. `restructuring` → `org_model`, `budget`, `kpi`
+6. `growth` → `org_model`, `budget`
+7. `org_health` → `org_model`, `budget`, `shared_resources`, `growth`, `kpi`
+8. `org_report` → all Phase 6 modules above
+
 ## What this codebase deliberately leaves out
 
 - A web UI or a GUI workflow authoring tool (JSON persistence supports
@@ -387,6 +421,8 @@ executive sponsor actually needs to read. See `docs/ai_adoption.md`.
   itself -- all three are evaluated after the fact, against a workflow's
   structure or a completed run's event log, rather than changing
   scheduling decisions while a simulation is in progress.
+- In-simulation shared resource enforcement (contention is computed
+  analytically post-run, not modelled through the discrete-event engine).
 
 These remain natural extensions for later phases once the current
 models have proven themselves on more examples.
