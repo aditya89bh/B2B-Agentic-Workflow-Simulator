@@ -44,7 +44,7 @@ Repository = "https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator"
 where = ["src"]
 
 [tool.setuptools.package-data]
-b2b_workflow_simulator = ["examples/data/*.json"]
+b2b_workflow_simulator = ["examples/data/*.json", "examples/data/assumptions/**/*.json"]
 
 [tool.ruff]
 line-length = 100
