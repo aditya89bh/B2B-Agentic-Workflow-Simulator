@@ -1,5 +1,57 @@
 # Changelog
 
+## Phase 6.5 — Foundation Hardening
+
+Closes the architectural and correctness gaps identified in the Phase 6 engineering
+audit before Phase 7 begins.  No new product areas; all changes are internal
+improvements or correctness fixes to existing Phase 6 interfaces.
+
+- **KPI-only simulation mode** (`simulation.py`, `discrete_event.py`): Added
+  `collect_events: bool = True` to `SimulationRunner.run()` and
+  `DiscreteEventEngine.run()`.  When `False`, no `Event` objects are allocated,
+  reducing memory by ~99% for large or repeated runs (e.g. Monte Carlo, growth
+  projections).  KPI output is bit-for-bit identical.  Fully backward compatible.
+
+- **Org-aware restructuring** (`restructuring.py`): `evaluate_restructuring`
+  now uses `org.total_headcount()`, `len(org.departments)`, `len(org.teams)`,
+  `org.ai_agent_count() / org.total_headcount()` (AI fraction), and
+  `org.manager_count() / org.total_headcount()` (manager ratio) to scale
+  heuristic estimates.  Larger orgs benefit more from centralization; orgs
+  already high in AI adoption see diminishing returns from `CREATE_AI_OPS_TEAM`.
+  Added `_org_scale_factors()` helper and 36 new targeted tests.
+
+- **Shared resource contention in org health** (`org_health.py`): Bottleneck
+  shared resources (contention_ratio > 1.0) now reduce the utilization balance,
+  queue pressure, and SPOF dimension scores.  At-risk resources (high/moderate)
+  contribute a smaller penalty.  Explanations name the specific bottleneck resources.
+
+- **Growth projection in org health** (`org_health.py`): Near-term breaking points
+  (months 1–6) in a supplied `GrowthProjection` now reduce the SLA risk dimension
+  score by up to 25 points and the budget pressure score by up to 20 points.  Safe
+  projections (no breaking points) have no effect on scores.
+
+- **Growth projection AI adoption seeding** (`growth.py`): `project_growth` now
+  derives the starting AI adoption level from `org.ai_agent_count() /
+  org.total_headcount()` by default, so an org already 30% AI-staffed begins at
+  0.30 rather than 0.0.  `GrowthConfig.initial_ai_adoption: float | None = None`
+  allows explicit override.  Added 11 new tests.
+
+- **GitHub Actions CI** (`.github/workflows/ci.yml`): Runs on push to `main` and
+  on every pull request.  Matrix: Python 3.10 / 3.11 / 3.12.  Steps: install,
+  `ruff check .`, `pytest`, `python -m build`.
+
+- **Contribution infrastructure**: Added `CONTRIBUTING.md` (setup, commands, commit
+  conventions, PR checklist) and `CODE_OF_CONDUCT.md`.
+
+- **Documentation cleanup**: `docs/org_health_score.md`, `docs/restructuring_simulation.md`,
+  and `docs/org_growth_projection.md` updated to describe actual parameter behavior
+  (no more "reserved for future refinement" language).  `docs/architecture.md`
+  updated with Phase 6.5 section.
+
+- **Tests**: 80+ new tests across `test_collect_events.py`,
+  `test_restructuring_org_aware.py`, `test_org_health_wiring.py`, and
+  `test_growth_ai_adoption.py`.
+
 ## Phase 6 - Organizational Digital Twin
 
 Lifts the simulator from individual-workflow analysis to the full organizational

@@ -1,8 +1,19 @@
 # Restructuring Simulation
 
 `restructuring.py` evaluates organizational design changes analytically,
-applying directional heuristics to the current KPI baseline to project cost,
-cycle-time, risk, staffing, and budget impacts.
+applying directional heuristics anchored to both the current KPI baseline and
+the organization's structural characteristics — headcount, department count, team
+count, AI agent fraction, and manager ratio — to project cost, cycle-time, risk,
+staffing, and budget impacts.
+
+**Key org-structural influences:**
+
+- Larger organizations (more departments/teams) benefit more from centralization
+  and shared-services functions.
+- Organizations already high in AI adoption see diminishing returns from creating
+  a new AI ops team (`org.ai_agent_count() / org.total_headcount()` is used).
+- Higher manager ratio increases process risk when approval layers are removed.
+- Smaller organizations gain proportionally more from adding individual staff.
 
 ## Scenario types
 

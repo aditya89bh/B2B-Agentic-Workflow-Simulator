@@ -13,6 +13,7 @@ staffing or budget assumptions.
 | `seasonal_multipliers` | `[1.0] * 12` | Per-month demand multipliers (Jan–Dec) |
 | `headcount_growth_rate` | 0.0 | Fractional MoM headcount increase |
 | `ai_adoption_increase_rate` | 0.0 | Monthly increment in AI adoption (0–1) |
+| `initial_ai_adoption` | `None` | Starting AI adoption (0–1). When `None`, automatically derived from `org.ai_agent_count() / org.total_headcount()` so an org already 30% AI-staffed begins the projection at 0.30. Set explicitly to override. |
 | `budget_increase_rate` | 0.0 | Fractional MoM budget increase |
 | `base_cases_per_month` | 200 | Baseline monthly case volume |
 | `base_cost_per_case` | 100.0 | Baseline cost per completed case |

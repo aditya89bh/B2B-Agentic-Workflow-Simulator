@@ -368,6 +368,18 @@ recommendations, and AI adoption -- the same underlying data every other
 report type in this codebase renders, assembled into the one document an
 executive sponsor actually needs to read. See `docs/ai_adoption.md`.
 
+## Phase 6.5: Foundation hardening
+
+Phase 6.5 closes the API gaps identified in the Phase 6 engineering audit:
+
+- **`collect_events` parameter** (`simulation.py`, `discrete_event.py`): `SimulationRunner.run(..., collect_events=False)` skips event-object creation entirely, reducing memory from ~25 MB to negligible for large runs (50k cases).  KPI calculations are identical.  Supported by both engines.
+- **Org-aware restructuring** (`restructuring.py`): `evaluate_restructuring(org, ...)` now uses headcount, department count, AI agent fraction, and manager ratio to scale heuristic estimates.  Different org structures produce different outputs.
+- **Shared resource contention in health** (`org_health.py`): bottleneck shared resources now reduce the utilization balance, queue pressure, and SPOF dimension scores, with explanations citing the resource names.
+- **Growth projection in health** (`org_health.py`): near-term breaking points (months 1–6) in a `GrowthProjection` now reduce the SLA risk and budget pressure dimension scores.
+- **Growth AI adoption seeding** (`growth.py`): `project_growth` derives starting AI adoption from `org.ai_agent_count() / org.total_headcount()` by default; `GrowthConfig.initial_ai_adoption` allows explicit override.
+- **CI pipeline** (`.github/workflows/ci.yml`): pytest + ruff + build on every push and PR, across Python 3.10, 3.11, 3.12.
+- **Contribution infrastructure**: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
+
 ## Phase 6: Organizational digital twin layer
 
 Phase 6 adds an org-level layer that sits above individual workflows:
