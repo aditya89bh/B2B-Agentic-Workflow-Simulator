@@ -33,6 +33,14 @@ from b2b_workflow_simulator.org_model import Organization
 _CAPACITY_OVERLOAD_THRESHOLD = 1.0
 _BUDGET_OVERLOAD_THRESHOLD = 1.15
 
+# Each simulated case is assumed to consume this fraction of one actor's
+# daily capacity in minutes.  Used to translate case volume into demand
+# minutes for capacity utilization estimates.
+_MINUTES_PER_CASE_FACTOR = 0.1
+
+# AI adoption reduces cost per case by this fraction per 1.0 adoption unit.
+_AI_COST_REDUCTION_PER_UNIT = 0.3
+
 
 @dataclass
 class GrowthConfig:
@@ -205,13 +213,15 @@ def project_growth(
         )
 
         ai_adoption = min(1.0, config.ai_adoption_increase_rate * i)
-        effective_cost_per_case = cost_per_case * (1.0 - ai_adoption * 0.3)
+        effective_cost_per_case = cost_per_case * (1.0 - ai_adoption * _AI_COST_REDUCTION_PER_UNIT)
         projected_cost = projected_cases * effective_cost_per_case
 
         budget_factor = (1.0 + config.budget_increase_rate) ** i
         projected_budget = base_monthly_budget * budget_factor
 
-        demand_minutes = projected_cases * (config.actor_capacity_per_head * 0.1)
+        demand_minutes = (
+            projected_cases * config.actor_capacity_per_head * _MINUTES_PER_CASE_FACTOR
+        )
         cap_util = demand_minutes / current_capacity if current_capacity > 0 else 0.0
 
         is_breaking = False
