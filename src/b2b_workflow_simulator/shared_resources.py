@@ -75,7 +75,12 @@ class SharedResource:
         capacity_minutes_per_day: Maximum minutes this resource can work
             in a single day.
         cost_per_use: Incremental cost each time the resource is invoked.
-        department_ids: Departments that may claim this resource.
+        department_ids: Departments that may claim this resource.  Used as
+            metadata only; does not filter contention calculations.
+        actor_ids: Workflow actor IDs (from ``Workflow.actors``) whose
+            simulation busy-minutes contribute to this resource's demand.
+            Used by :meth:`SharedResourcePool.record_usage_from_kpi` to
+            automatically derive usage from simulation output.
     """
 
     resource_id: str
@@ -84,6 +89,7 @@ class SharedResource:
     capacity_minutes_per_day: float
     cost_per_use: float = 0.0
     department_ids: list[str] = field(default_factory=list)
+    actor_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -275,6 +281,64 @@ class SharedResourcePool:
             rid: self.compute_contention(rid, days).contention_ratio
             for rid in self._resources
         }
+
+    def record_usage_from_kpi(
+        self,
+        workflow_id: str,
+        dept_id: str,
+        actor_busy_minutes: dict[str, float],
+    ) -> None:
+        """Record shared-resource usage from per-actor busy minutes.
+
+        For each registered resource whose ``actor_ids`` intersect with
+        ``actor_busy_minutes``, the sum of busy minutes for those actors
+        is recorded as usage for that resource.
+
+        Args:
+            workflow_id: The workflow whose actor minutes are being processed.
+            dept_id: The department that owns the workflow.
+            actor_busy_minutes: Mapping of actor_id → busy minutes.  Use
+                ``kpi.actor_busy_minutes`` for capacity-aware runs, or derive
+                it from ``kpi.node_total_duration_minutes`` via the workflow's
+                node→actor mapping for non-capacity-aware runs.
+        """
+        for resource in self._resources.values():
+            if not resource.actor_ids:
+                continue
+            usage = sum(
+                actor_busy_minutes.get(actor_id, 0.0)
+                for actor_id in resource.actor_ids
+            )
+            if usage > 0.0:
+                self._usage_records.append(
+                    ResourceUsageRecord(
+                        resource_id=resource.resource_id,
+                        workflow_id=workflow_id,
+                        dept_id=dept_id,
+                        usage_minutes=usage,
+                    )
+                )
+
+    def record_usage_from_kpi_results(
+        self,
+        actor_minutes_by_workflow: dict[str, dict[str, float]],
+        dept_id_by_workflow: dict[str, str] | None = None,
+    ) -> None:
+        """Record usage from multiple actor-minutes mappings at once.
+
+        Args:
+            actor_minutes_by_workflow: Mapping of workflow_id →
+                (actor_id → busy minutes).
+            dept_id_by_workflow: Optional mapping of workflow_id → dept_id.
+                If omitted, ``dept_id`` defaults to the workflow_id.
+        """
+        for workflow_id, actor_minutes in actor_minutes_by_workflow.items():
+            dept_id = (
+                dept_id_by_workflow.get(workflow_id, workflow_id)
+                if dept_id_by_workflow
+                else workflow_id
+            )
+            self.record_usage_from_kpi(workflow_id, dept_id, actor_minutes)
 
 
 __all__ = [
