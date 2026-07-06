@@ -277,6 +277,61 @@ See `src/b2b_workflow_simulator/examples/` for complete before/after
 pairs, and `docs/redesign_analysis.md` for what each part of the report
 means.
 
+## Phase 6 — Organizational digital twin
+
+Phase 6 wraps all three workflow examples in a B2B SaaS organizational model
+with six departments, shared resources, a budget, and a health score.
+
+### Run the org simulation
+
+```bash
+b2b-simulator run-org --cases 200 --seed 42
+```
+
+### Organizational health score
+
+```bash
+b2b-simulator org-health --cases 200 --seed 42 --html-output health.html
+```
+
+### Budget analysis
+
+```bash
+b2b-simulator org-budget-analysis
+```
+
+### Shared resource contention
+
+```bash
+b2b-simulator org-resource-contention --days 5
+```
+
+### Growth projection
+
+```bash
+b2b-simulator org-growth-projection \
+  --monthly-growth-rate 0.08 \
+  --base-cases 200 \
+  --base-headcount 18 \
+  --headcount-growth 0.02 \
+  --ai-adoption-rate 0.03 \
+  --html-output growth.html
+```
+
+### Restructuring scenario analysis
+
+```bash
+b2b-simulator org-restructure-scenario create_ai_ops_team --cases 200 --seed 42
+b2b-simulator org-restructure-scenario hire_additional_staff --cases 200 --seed 42
+b2b-simulator org-restructure-scenario reduce_approval_layers --cases 200 --seed 42
+```
+
+### Full organizational executive report
+
+```bash
+b2b-simulator org-executive-report --cases 200 --seed 42 --html-output org_exec.html
+```
+
 ## Running the test suite
 
 ```bash
