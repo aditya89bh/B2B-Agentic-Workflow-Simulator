@@ -1,5 +1,75 @@
 # Changelog
 
+## Phase 6 - Organizational Digital Twin
+
+Lifts the simulator from individual-workflow analysis to the full organizational
+level: departments, teams, budgets, shared resources, multi-workflow runs,
+growth projections, restructuring scenarios, and a composite health score.  All
+Phase 1–5 APIs remain fully backward compatible.
+
+- **Organization model** (`org_model.py`): `Organization`, `Department`, `Team`,
+  `Role`, `ReportingLine`, and `OrgUnit` give every workflow a home inside a
+  structured hierarchy.  `Organization.validate()` checks referential integrity.
+  `org_units()` projects the hierarchy as a traversable flat list.
+
+- **Budget model** (`budget.py`): `BudgetAllocation`, `DepartmentBudget`, and
+  `OrgBudget` track spend across five categories (operating, implementation, AI
+  tooling, hiring, training), surface utilization, overruns, and a 0–100
+  budget pressure score.
+
+- **Shared resource pool** (`shared_resources.py`): `SharedResource`,
+  `ResourceContention`, and `SharedResourcePool` model resources shared across
+  workflows (legal reviewers, finance approvers, AI agents, software tools,
+  external vendors), computing contention ratios and qualitative overload risk
+  (`none` / `moderate` / `high` / `critical`).
+
+- **Cross-workflow simulation** (`cross_workflow.py`): `CrossWorkflowSimulator`
+  runs multiple workflows against one `Organization`, producing a
+  `CrossWorkflowResult` that aggregates per-workflow `SimulationResult` objects.
+
+- **Restructuring simulation** (`restructuring.py`): `RestructuringScenario` and
+  `evaluate_restructuring` model seven organizational design changes — centralize
+  team, decentralize team, add shared services, outsource stage, create AI ops
+  team, hire additional staff, reduce approval layers — projecting cost,
+  cycle-time, risk, staffing, and budget impacts.
+  `compare_restructuring_scenarios` ranks a set by net benefit score.
+
+- **Growth projection engine** (`growth.py`): `GrowthConfig` and `project_growth`
+  generate a 12-month forecast of case volume, cost, headcount, budget, AI
+  adoption, and capacity utilization; breaking points (capacity or budget
+  overload) are flagged with explanatory reasons.
+
+- **Organizational health score** (`org_health.py`): `compute_org_health` scores
+  eight dimensions (utilization balance, queue pressure, budget pressure,
+  compliance risk, SLA risk, AI readiness, single points of failure, cross-team
+  dependency load) into a weighted composite 0–100 score with a letter grade
+  (A–F) and per-dimension explanations.
+
+- **Org digital twin report** (`org_report.py`): `OrgDigitalTwinReport` bundles
+  all Phase 6 analysis results; `generate_org_digital_twin_report` renders them
+  as a single multi-section plain-text document.
+
+- **HTML renderers**: `html_report.py` gains `render_org_health_html`,
+  `render_org_budget_html`, `render_org_growth_html`, and
+  `render_org_executive_html` for standalone HTML org reports.
+
+- **Bundled B2B SaaS example** (`examples/saas_org.py`): `build_saas_org`,
+  `build_saas_org_budget`, and `build_saas_shared_resources` provide a
+  pre-built 6-department, 18-role B2B SaaS company with the three existing
+  workflows wired in.
+
+- **Seven new CLI commands**: `run-org`, `org-health`, `org-budget-analysis`,
+  `org-resource-contention`, `org-growth-projection`, `org-restructure-scenario`,
+  `org-executive-report`.
+
+- **Documentation**: `docs/organization_model.md`, `docs/budget_modeling.md`,
+  `docs/shared_resources.md`, `docs/org_growth_projection.md`,
+  `docs/restructuring_simulation.md`, `docs/org_health_score.md`;
+  `docs/architecture.md`, `docs/getting_started.md`, and `README.md` updated.
+
+- **Tests**: 296 new tests across 11 new test files covering all Phase 6
+  modules, HTML escaping, CLI commands, and backward compatibility.
+
 ## Phase 5 - Enterprise Decision-Support Platform
 
 Transformed the simulator from an enterprise workflow simulator into an
