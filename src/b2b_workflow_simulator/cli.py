@@ -317,16 +317,16 @@ def compare_portfolio(
 
 def compare_example(
     example_name: str,
-    num_cases: int,
+    num_cases: int | None,
     seed: int | None,
     implementation_cost: float | None,
     arrival_interval_minutes: float | None,
-    engine: str = "simple",
+    engine: str | None = None,
     assumptions_path: str | None = None,
 ) -> int:
     """Run both variants of a bundled example and print a full ROI report."""
     profile = _load_profile(assumptions_path)
-    effective_cases = num_cases if num_cases != 200 else profile.num_cases
+    effective_cases = num_cases if num_cases is not None else profile.num_cases
     effective_seed = seed if seed is not None else profile.seed
     effective_impl = (
         implementation_cost if implementation_cost is not None
@@ -336,12 +336,13 @@ def compare_example(
         arrival_interval_minutes if arrival_interval_minutes is not None
         else profile.arrival_interval_minutes
     )
+    effective_engine = engine if engine is not None else profile.engine
     run_profile = AssumptionProfile(
         num_cases=effective_cases,
         seed=effective_seed,
         implementation_cost=effective_impl,
         arrival_interval_minutes=effective_interval,
-        engine=engine,
+        engine=effective_engine,
         ai_error_rate_multiplier=profile.ai_error_rate_multiplier,
         ai_cost_multiplier=profile.ai_cost_multiplier,
         human_hourly_cost_multiplier=profile.human_hourly_cost_multiplier,
@@ -350,7 +351,7 @@ def compare_example(
     outcome = _run_before_after_with_profile(
         example_name, run_profile,
         arrival_interval_minutes=effective_interval,
-        engine=engine,
+        engine=effective_engine,
     )
     if outcome is None:
         return 1
@@ -1228,8 +1229,8 @@ def roi_waterfall(
 ) -> int:
     """Run a bundled example and render an ROI waterfall."""
     profile = _load_profile(assumptions_path)
-    effective_cases = num_cases if num_cases != 200 else profile.num_cases
-    effective_seed = seed if seed != 42 else profile.seed
+    effective_cases = num_cases if num_cases is not None else profile.num_cases
+    effective_seed = seed if seed is not None else profile.seed
     effective_impl = (
         implementation_cost if implementation_cost is not None
         else profile.implementation_cost
@@ -1277,8 +1278,8 @@ def bottleneck_heatmap(
 ) -> int:
     """Run a bundled example variant and render a bottleneck heatmap."""
     profile = _load_profile(assumptions_path)
-    effective_cases = num_cases if num_cases != 200 else profile.num_cases
-    effective_seed = seed if seed != 42 else profile.seed
+    effective_cases = num_cases if num_cases is not None else profile.num_cases
+    effective_seed = seed if seed is not None else profile.seed
     effective_interval = (
         arrival_interval if arrival_interval is not None
         else profile.arrival_interval_minutes
@@ -1318,8 +1319,8 @@ def executive_snapshot(
 ) -> int:
     """Run both variants of a bundled example and print a concise snapshot."""
     profile = _load_profile(assumptions_path)
-    effective_cases = num_cases if num_cases != 200 else profile.num_cases
-    effective_seed = seed if seed != 42 else profile.seed
+    effective_cases = num_cases if num_cases is not None else profile.num_cases
+    effective_seed = seed if seed is not None else profile.seed
     effective_impl = (
         implementation_cost if implementation_cost is not None
         else profile.implementation_cost
@@ -1366,8 +1367,8 @@ def consultant_packet(
 ) -> int:
     """Generate a full stakeholder packet directory for a bundled example."""
     profile = _load_profile(assumptions_path)
-    effective_cases = num_cases if num_cases != 200 else profile.num_cases
-    effective_seed = seed if seed != 42 else profile.seed
+    effective_cases = num_cases if num_cases is not None else profile.num_cases
+    effective_seed = seed if seed is not None else profile.seed
     effective_impl = (
         implementation_cost if implementation_cost is not None
         else profile.implementation_cost
@@ -1513,14 +1514,14 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser.add_argument(
         "--cases",
         type=int,
-        default=200,
-        help="Number of cases to simulate per variant (default: 200).",
+        default=None,
+        help="Number of cases to simulate per variant (default: 200, or profile.num_cases).",
     )
     compare_parser.add_argument(
         "--seed",
         type=int,
-        default=42,
-        help="Random seed for reproducible results (default: 42).",
+        default=None,
+        help="Random seed for reproducible results (default: 42, or profile.seed).",
     )
     compare_parser.add_argument(
         "--implementation-cost",
@@ -1537,8 +1538,8 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser.add_argument(
         "--engine",
         choices=ENGINES,
-        default="simple",
-        help="Simulation engine: 'simple' (default) or 'discrete'.",
+        default=None,
+        help="Simulation engine: 'simple' (default) or 'discrete', or profile.engine.",
     )
     compare_parser.add_argument(
         "--assumptions",
@@ -2323,10 +2324,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     waterfall_parser.add_argument("name", choices=sorted(EXAMPLES),
                                   help="Name of the bundled example.")
-    waterfall_parser.add_argument("--cases", type=int, default=200,
-                                  help="Number of cases to simulate (default: 200).")
-    waterfall_parser.add_argument("--seed", type=int, default=42,
-                                  help="Random seed (default: 42).")
+    waterfall_parser.add_argument("--cases", type=int, default=None,
+                                  help="Cases to simulate (default: 200, or profile.num_cases).")
+    waterfall_parser.add_argument("--seed", type=int, default=None,
+                                  help="Random seed (default: 42, or profile.seed).")
     waterfall_parser.add_argument("--implementation-cost", type=float, default=None,
                                   help="One-time implementation cost.")
     waterfall_parser.add_argument("--format", choices=("text", "svg"), default="text",
@@ -2349,10 +2350,10 @@ def build_parser() -> argparse.ArgumentParser:
                                 help="Name of the bundled example.")
     heatmap_parser.add_argument("--variant", choices=("before", "after"), default="after",
                                 help="Variant to analyze (default: after).")
-    heatmap_parser.add_argument("--cases", type=int, default=200,
-                                help="Number of cases to simulate (default: 200).")
-    heatmap_parser.add_argument("--seed", type=int, default=42,
-                                help="Random seed (default: 42).")
+    heatmap_parser.add_argument("--cases", type=int, default=None,
+                                help="Cases to simulate (default: 200, or profile.num_cases).")
+    heatmap_parser.add_argument("--seed", type=int, default=None,
+                                help="Random seed (default: 42, or profile.seed).")
     heatmap_parser.add_argument("--arrival-interval", type=float, default=None,
                                 help="Minutes between case arrivals.")
     heatmap_parser.add_argument("--format", choices=("text", "svg"), default="text",
@@ -2373,10 +2374,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     snapshot_parser.add_argument("name", choices=sorted(EXAMPLES),
                                  help="Name of the bundled example.")
-    snapshot_parser.add_argument("--cases", type=int, default=200,
-                                 help="Number of cases to simulate (default: 200).")
-    snapshot_parser.add_argument("--seed", type=int, default=42,
-                                 help="Random seed (default: 42).")
+    snapshot_parser.add_argument("--cases", type=int, default=None,
+                                 help="Cases to simulate (default: 200, or profile.num_cases).")
+    snapshot_parser.add_argument("--seed", type=int, default=None,
+                                 help="Random seed (default: 42, or profile.seed).")
     snapshot_parser.add_argument("--implementation-cost", type=float, default=None,
                                  help="One-time implementation cost.")
     snapshot_parser.add_argument("--arrival-interval", type=float, default=None,
@@ -2397,10 +2398,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     packet_parser.add_argument("name", choices=sorted(EXAMPLES),
                                help="Name of the bundled example.")
-    packet_parser.add_argument("--cases", type=int, default=200,
-                               help="Number of cases to simulate (default: 200).")
-    packet_parser.add_argument("--seed", type=int, default=42,
-                               help="Random seed (default: 42).")
+    packet_parser.add_argument("--cases", type=int, default=None,
+                               help="Cases to simulate (default: 200, or profile.num_cases).")
+    packet_parser.add_argument("--seed", type=int, default=None,
+                               help="Random seed (default: 42, or profile.seed).")
     packet_parser.add_argument("--implementation-cost", type=float, default=None,
                                help="One-time implementation cost.")
     packet_parser.add_argument("--output-dir", default="packet",
