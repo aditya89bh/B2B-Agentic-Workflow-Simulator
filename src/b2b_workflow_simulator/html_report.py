@@ -12,6 +12,7 @@ from __future__ import annotations
 import html
 
 from b2b_workflow_simulator.ai_adoption import RECOMMENDATION_LABELS, AIAdoptionAssessment
+from b2b_workflow_simulator.budget import OrgBudget
 from b2b_workflow_simulator.capacity_planning import (
     BALANCED,
     OVERLOADED,
@@ -880,7 +881,7 @@ def render_org_health_html(health_score: OrgHealthScore) -> str:
     return _page(f"{health_score.org_name} - Org Health Score", body)
 
 
-def render_org_budget_html(org: Organization, org_budget) -> str:
+def render_org_budget_html(org: Organization, org_budget: OrgBudget) -> str:
     """Render an ``OrgBudget`` as a standalone HTML budget analysis report."""
     dept_rows = []
     for dept_id, budget in org_budget.dept_budgets.items():
