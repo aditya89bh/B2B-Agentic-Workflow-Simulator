@@ -322,14 +322,41 @@ def compare_example(
     implementation_cost: float | None,
     arrival_interval_minutes: float | None,
     engine: str = "simple",
+    assumptions_path: str | None = None,
 ) -> int:
     """Run both variants of a bundled example and print a full ROI report."""
-    outcome = _run_before_after(example_name, num_cases, seed, arrival_interval_minutes, engine)
+    profile = _load_profile(assumptions_path)
+    effective_cases = num_cases if num_cases != 200 else profile.num_cases
+    effective_seed = seed if seed is not None else profile.seed
+    effective_impl = (
+        implementation_cost if implementation_cost is not None
+        else profile.implementation_cost
+    )
+    effective_interval = (
+        arrival_interval_minutes if arrival_interval_minutes is not None
+        else profile.arrival_interval_minutes
+    )
+    run_profile = AssumptionProfile(
+        num_cases=effective_cases,
+        seed=effective_seed,
+        implementation_cost=effective_impl,
+        arrival_interval_minutes=effective_interval,
+        engine=engine,
+        ai_error_rate_multiplier=profile.ai_error_rate_multiplier,
+        ai_cost_multiplier=profile.ai_cost_multiplier,
+        human_hourly_cost_multiplier=profile.human_hourly_cost_multiplier,
+        collect_events=False,
+    )
+    outcome = _run_before_after_with_profile(
+        example_name, run_profile,
+        arrival_interval_minutes=effective_interval,
+        engine=engine,
+    )
     if outcome is None:
         return 1
     _before_workflow, _after_workflow, before_result, after_result = outcome
 
-    diff = compare_workflows(before_result.kpi, after_result.kpi, implementation_cost)
+    diff = compare_workflows(before_result.kpi, after_result.kpi, effective_impl)
     print(generate_report(diff))
     return 0
 
@@ -1513,6 +1540,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="simple",
         help="Simulation engine: 'simple' (default) or 'discrete'.",
     )
+    compare_parser.add_argument(
+        "--assumptions",
+        default=None,
+        help=(
+            'Path to an assumption profile JSON file. '
+            'Scales AI error rates, AI costs, and human costs; '
+            'also overrides --cases, --seed, --arrival-interval, '
+            'and --implementation-cost.'
+        ),
+    )
 
     compare_portfolio_parser = subparsers.add_parser(
         "compare-portfolio",
@@ -2297,7 +2334,12 @@ def build_parser() -> argparse.ArgumentParser:
     waterfall_parser.add_argument("--output", default=None,
                                   help="If set, write output to this file.")
     waterfall_parser.add_argument("--assumptions", default=None,
-                                  help="Path to an assumption profile JSON file.")
+                                  help=(
+                                      'Path to an assumption profile JSON file. '
+                                      'Scales AI error rates, AI costs, and human costs; '
+                                      'also overrides --cases, --seed, --arrival-interval, '
+                                      'and --implementation-cost.'
+                                  ))
 
     heatmap_parser = subparsers.add_parser(
         "bottleneck-heatmap",
@@ -2318,7 +2360,12 @@ def build_parser() -> argparse.ArgumentParser:
     heatmap_parser.add_argument("--output", default=None,
                                 help="If set, write output to this file.")
     heatmap_parser.add_argument("--assumptions", default=None,
-                                help="Path to an assumption profile JSON file.")
+                                help=(
+                                    'Path to an assumption profile JSON file. '
+                                    'Scales AI error rates, AI costs, and human costs; '
+                                    'also overrides --cases, --seed, --arrival-interval, '
+                                    'and --implementation-cost.'
+                                ))
 
     snapshot_parser = subparsers.add_parser(
         "executive-snapshot",
@@ -2337,7 +2384,12 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot_parser.add_argument("--html-output", default=None,
                                  help="If set, also write an HTML snapshot to this path.")
     snapshot_parser.add_argument("--assumptions", default=None,
-                                 help="Path to an assumption profile JSON file.")
+                                 help=(
+                                     'Path to an assumption profile JSON file. '
+                                     'Scales AI error rates, AI costs, and human costs; '
+                                     'also overrides --cases, --seed, --arrival-interval, '
+                                     'and --implementation-cost.'
+                                 ))
 
     packet_parser = subparsers.add_parser(
         "consultant-packet",
@@ -2354,7 +2406,12 @@ def build_parser() -> argparse.ArgumentParser:
     packet_parser.add_argument("--output-dir", default="packet",
                                help="Directory to write the packet into (default: ./packet).")
     packet_parser.add_argument("--assumptions", default=None,
-                               help="Path to an assumption profile JSON file.")
+                               help=(
+                                   'Path to an assumption profile JSON file. '
+                                   'Scales AI error rates, AI costs, and human costs; '
+                                   'also overrides --cases, --seed, --arrival-interval, '
+                                   'and --implementation-cost.'
+                               ))
 
     gallery_parser = subparsers.add_parser(
         "generate-example-gallery",
@@ -2395,6 +2452,7 @@ def main(argv: list[str] | None = None) -> int:
             args.implementation_cost,
             args.arrival_interval,
             args.engine,
+            getattr(args, "assumptions", None),
         )
 
     if args.command == "sensitivity-example":
