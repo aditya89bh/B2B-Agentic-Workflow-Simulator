@@ -107,10 +107,12 @@ class DiscreteEventEngine:
         num_cases: int,
         arrival_interval_minutes: float | None = None,
         arrival_model: ArrivalModel | None = None,
+        collect_events: bool = True,
     ) -> SimulationResult:
         """Simulate `num_cases` cases through `workflow` via the event queue.
 
-        Arguments have the same meaning as `SimulationRunner.run`.
+        Arguments have the same meaning as `SimulationRunner.run`, including
+        ``collect_events`` (see that method's docstring for details).
         """
         if num_cases <= 0:
             raise ValueError("num_cases must be a positive integer")
@@ -135,10 +137,14 @@ class DiscreteEventEngine:
         while queue:
             item = heapq.heappop(queue)
             if item.kind == _ARRIVAL:
-                self._handle_arrival(workflow, item, events, kpi, scheduler, pool_scheduler, queue)
+                self._handle_arrival(
+                    workflow, item, events, kpi, scheduler, pool_scheduler, queue,
+                    collect_events=collect_events,
+                )
             else:
                 self._handle_task_complete(
-                    workflow, item, events, kpi, scheduler, pool_scheduler, queue
+                    workflow, item, events, kpi, scheduler, pool_scheduler, queue,
+                    collect_events=collect_events,
                 )
 
         kpi.total_cases = num_cases
@@ -146,7 +152,8 @@ class DiscreteEventEngine:
             record_actor_utilization(workflow, kpi, scheduler)
         record_pool_utilization(workflow, kpi, pool_scheduler)
 
-        events.sort(key=lambda event: event.timestamp_minutes)
+        if collect_events:
+            events.sort(key=lambda event: event.timestamp_minutes)
         return SimulationResult(workflow_name=workflow.name, events=events, kpi=kpi)
 
     def _push(
@@ -166,9 +173,11 @@ class DiscreteEventEngine:
         scheduler: ActorScheduler | None,
         pool_scheduler: PoolScheduler,
         queue: list[_QueuedEvent],
+        collect_events: bool = True,
     ) -> None:
         case_id = item.payload["case_id"]
-        events.append(Event(EventType.CASE_STARTED, item.timestamp, case_id))
+        if collect_events:
+            events.append(Event(EventType.CASE_STARTED, item.timestamp, case_id))
         self._start_node(
             workflow,
             case_id,
@@ -180,6 +189,7 @@ class DiscreteEventEngine:
             scheduler=scheduler,
             pool_scheduler=pool_scheduler,
             queue=queue,
+            collect_events=collect_events,
         )
 
     def _start_node(
@@ -194,6 +204,7 @@ class DiscreteEventEngine:
         scheduler: ActorScheduler | None,
         pool_scheduler: PoolScheduler,
         queue: list[_QueuedEvent],
+        collect_events: bool = True,
     ) -> None:
         node = workflow.get_node(node_id)
         actor = workflow.get_actor(node.actor_id)
@@ -213,7 +224,7 @@ class DiscreteEventEngine:
             kpi.actor_wait_minutes[actor.actor_id] = (
                 kpi.actor_wait_minutes.get(actor.actor_id, 0.0) + wait
             )
-            if wait > 0:
+            if collect_events and wait > 0:
                 events.append(
                     Event(
                         EventType.TASK_QUEUED,
@@ -226,9 +237,10 @@ class DiscreteEventEngine:
                 )
 
         kpi.node_visit_counts[node.node_id] = kpi.node_visit_counts.get(node.node_id, 0) + 1
-        events.append(
-            Event(EventType.TASK_STARTED, start, case_id, node.node_id, actor.actor_id, details)
-        )
+        if collect_events:
+            events.append(
+                Event(EventType.TASK_STARTED, start, case_id, node.node_id, actor.actor_id, details)
+            )
 
         failed = self._rng.random() < scheduled.error_rate
         escalated = (
@@ -252,6 +264,8 @@ class DiscreteEventEngine:
                 "is_terminal": node.is_terminal,
                 "arrival_time": arrival_time,
                 "tracks_capacity": tracks_capacity,
+                "details": details,
+                "collect_events": collect_events,
             },
         )
 
@@ -264,6 +278,7 @@ class DiscreteEventEngine:
         scheduler: ActorScheduler | None,
         pool_scheduler: PoolScheduler,
         queue: list[_QueuedEvent],
+        collect_events: bool = True,
     ) -> None:
         payload = item.payload
         case_id = payload["case_id"]
@@ -273,43 +288,53 @@ class DiscreteEventEngine:
         cost = payload["cost"]
         tracks_capacity = payload["tracks_capacity"]
         timestamp = item.timestamp
+        # collect_events from payload takes precedence (set by _start_node)
+        collect_events = payload.get("collect_events", collect_events)
 
         if payload["failed"]:
             record_task_totals(kpi, node_id, duration, cost)
             kpi.node_failure_counts[node_id] = kpi.node_failure_counts.get(node_id, 0) + 1
-            events.append(
-                Event(
-                    EventType.TASK_FAILED,
-                    timestamp,
-                    case_id,
-                    node_id,
-                    actor_id,
-                    {"reason": "actor_error"},
-                )
-            )
-            if tracks_capacity:
+            if collect_events:
                 events.append(
-                    Event(EventType.RESOURCE_RELEASED, timestamp, case_id, node_id, actor_id)
+                    Event(
+                        EventType.TASK_FAILED,
+                        timestamp,
+                        case_id,
+                        node_id,
+                        actor_id,
+                        {"reason": "actor_error"},
+                    )
                 )
-            events.append(Event(EventType.CASE_FAILED, timestamp, case_id))
+                if tracks_capacity:
+                    events.append(
+                        Event(EventType.RESOURCE_RELEASED, timestamp, case_id, node_id, actor_id)
+                    )
+                events.append(Event(EventType.CASE_FAILED, timestamp, case_id))
             kpi.failed_cases += 1
             kpi.total_duration_minutes += timestamp - payload["arrival_time"]
             return
 
         if payload["escalated"]:
             kpi.total_escalations += 1
-            events.append(Event(EventType.TASK_ESCALATED, timestamp, case_id, node_id, actor_id))
+            if collect_events:
+                events.append(
+                    Event(EventType.TASK_ESCALATED, timestamp, case_id, node_id, actor_id)
+                )
         else:
-            events.append(Event(EventType.TASK_COMPLETED, timestamp, case_id, node_id, actor_id))
+            if collect_events:
+                events.append(
+                    Event(EventType.TASK_COMPLETED, timestamp, case_id, node_id, actor_id)
+                )
 
         record_task_totals(kpi, node_id, duration, cost)
-        if tracks_capacity:
+        if collect_events and tracks_capacity:
             events.append(
                 Event(EventType.RESOURCE_RELEASED, timestamp, case_id, node_id, actor_id)
             )
 
         if payload["is_terminal"]:
-            events.append(Event(EventType.CASE_COMPLETED, timestamp, case_id))
+            if collect_events:
+                events.append(Event(EventType.CASE_COMPLETED, timestamp, case_id))
             kpi.completed_cases += 1
             kpi.total_duration_minutes += timestamp - payload["arrival_time"]
             return
@@ -326,6 +351,7 @@ class DiscreteEventEngine:
             scheduler=scheduler,
             pool_scheduler=pool_scheduler,
             queue=queue,
+            collect_events=collect_events,
         )
 
 
