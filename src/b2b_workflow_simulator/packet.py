@@ -113,7 +113,17 @@ def _build_readme(
     return "\n".join(lines)
 
 
-def _build_recommendations_txt(before_kpi: KPIResult, after_kpi: KPIResult) -> str:
+def build_recommendations_text(before_kpi: KPIResult, after_kpi: KPIResult) -> str:
+    """Build a plain-text recommendations block from two KPI results.
+
+    Args:
+        before_kpi: KPI result from the "before" simulation run.
+        after_kpi: KPI result from the "after" simulation run.
+
+    Returns:
+        A multi-line plain-text string with an overall recommendation and
+        a list of risk flags derived from the redesign diff.
+    """
     from b2b_workflow_simulator.redesign import compare_workflows
     from b2b_workflow_simulator.report import build_recommendation, build_risks
 
@@ -131,6 +141,10 @@ def _build_recommendations_txt(before_kpi: KPIResult, after_kpi: KPIResult) -> s
     ]
     lines += [f"  - {r}" for r in risks]
     return "\n".join(lines)
+
+
+# Backward-compatible private alias — do not import this in new code.
+_build_recommendations_txt = build_recommendations_text
 
 
 def generate_packet(
@@ -208,5 +222,6 @@ def generate_packet(
 
 
 __all__ = [
+    "build_recommendations_text",
     "generate_packet",
 ]
