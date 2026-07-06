@@ -9,6 +9,30 @@ This is not a toy agent demo. It is a modeling tool for answering a
 concrete question: *if we hand parts of this process to AI agents, does
 the workflow get better, break, or just change shape?*
 
+## Industry scenario library
+
+The simulator ships with **11 business scenarios** across 7 industries.
+
+```bash
+b2b-simulator list-scenarios
+b2b-simulator run-example healthcare-prior-authorization --cases 300
+b2b-simulator executive-snapshot it-support-triage --cases 300
+b2b-simulator scenario-matrix                         # compare all 11 scenarios
+b2b-simulator generate-case-studies --output-dir case_studies
+```
+
+| Category | Scenario |
+|---|---|
+| Healthcare | Prior Authorization |
+| Insurance | Claims Intake |
+| HR | Recruiting Screening |
+| Procurement | Vendor Onboarding |
+| Legal | Contract Review |
+| IT | Support Triage |
+| Finance | Month-End Close, Invoice Processing |
+| Customer Success | Onboarding Implementation, Support Tickets |
+| Sales | Lead Qualification |
+
 ## What you can do in 5 minutes
 
 ```bash

@@ -1,5 +1,53 @@
 # Changelog
 
+## Phase 8 — Industry Scenario Library and Consulting Case Studies
+
+Adds 8 new industry simulation scenarios, a central scenario registry, a
+case-study output generator, a cross-scenario comparison matrix, and
+assumption profile JSON files for every scenario.  All Phase 1–7 APIs are
+fully backward compatible.
+
+- **Scenario registry** (`scenarios.py`): `ScenarioDefinition` dataclass
+  with category constants, `get_scenario`, `list_scenarios`, `scenario_names`,
+  `scenarios_by_category`.  Includes all 3 original examples plus 8 new ones.
+
+- **8 new industry workflow modules** — each with `build_before_workflow`,
+  `build_after_workflow`, `default_assumptions`, `conservative_assumptions`,
+  `aggressive_assumptions`, `scenario_notes`:
+  - `healthcare_prior_authorization` — insurance PA from clinical submission through payer decision
+  - `insurance_claims_intake` — P&C claims from FNOL through adjudication
+  - `hr_recruiting_screening` — candidate pipeline from application through interview scheduling
+  - `procurement_vendor_onboarding` — vendor onboarding through compliance and activation
+  - `legal_contract_review` — contract review through AI redlining and execution
+  - `it_support_triage` — helpdesk incident from triage through L1/L2/L3 resolution
+  - `finance_month_end_close` — close process from data collection through reporting
+  - `customer_onboarding_implementation` — B2B SaaS implementation from contract through go-live
+
+- **Assumption profiles** (`examples/data/assumptions/`): 33 JSON profile
+  files (11 scenarios × 3 profiles).  All discoverable via
+  `load_assumption_profile`.
+
+- **Case study generator** (`case_studies.py`): `generate_case_study` and
+  `generate_all_case_studies` produce per-scenario directories with
+  executive snapshots (3 profiles), ROI waterfall SVG, bottleneck heatmap
+  SVG, Mermaid diagrams, KPI JSONs, and README.  All output is deterministic.
+  CLI: `generate-case-studies --scenario <slug> --profiles base,conservative,aggressive`.
+
+- **Scenario matrix** (`scenario_matrix.py`): `build_scenario_matrix` runs
+  every scenario under one assumption profile and returns a ranked table of
+  cost savings, completion rates, cycle-time delta, ROI, and risk level.
+  Supports text and JSON output.  CLI: `scenario-matrix --profile conservative`.
+
+- **CLI extensions**: `EXAMPLES` dict extended with all 8 new scenarios so
+  every existing Phase 7 command works with them.  New commands:
+  `list-scenarios`, `generate-case-studies`, `scenario-matrix`.
+
+- **Documentation**: `docs/scenario_library.md`, `docs/industry_case_studies.md`,
+  `docs/scenario_assumptions.md`; `README.md` updated with scenario library
+  section.
+
+- **Tests**: 394 new tests across 6 new test files.
+
 ## Phase 7 — Visualization and Stakeholder Usability
 
 Adds the consulting output layer: every analytical result from Phases 1–6.5
