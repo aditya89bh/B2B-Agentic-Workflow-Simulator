@@ -1875,9 +1875,15 @@ def scenario_matrix_cmd(
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from b2b_workflow_simulator import __version__
+
     parser = argparse.ArgumentParser(
         prog="b2b-simulator",
         description="Simulate and compare before/after B2B workflows.",
+    )
+    parser.add_argument(
+        "--version", action="version",
+        version=f"b2b-workflow-simulator {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
