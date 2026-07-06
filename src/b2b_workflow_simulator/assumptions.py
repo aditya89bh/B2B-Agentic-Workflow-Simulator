@@ -5,29 +5,41 @@ run in one JSON-serializable object.  Users can share profiles with clients,
 store them in version control, or swap between "conservative", "base", and
 "aggressive" scenarios without re-typing CLI flags.
 
-The profile also records adjustments (multipliers) for AI error rates, AI
-costs, and human hourly costs so a single workflow definition can be stress-
-tested across different economic assumptions without modifying the workflow.
+**Multipliers are applied to simulation inputs — not merely logged.**
 
-Note: multiplier adjustments are *reported in the profile* but the CLI
-currently applies them by description only (the actual adjustment requires
-building modified workflow copies, which is handled at the call site that
-consumes the profile).  This is intentional: the simulation engine takes
-complete ``Workflow`` objects, not partial overrides.
+The three economic multipliers (``ai_error_rate_multiplier``,
+``ai_cost_multiplier``, ``human_hourly_cost_multiplier``) are applied to
+workflow actor parameters via :func:`apply_profile_to_workflow` before any
+simulation runs.  This function returns a *new* ``Workflow`` with scaled
+actors; the original is never mutated.  The CLI commands ``compare-example``,
+``roi-waterfall``, ``bottleneck-heatmap``, ``executive-snapshot``, and
+``consultant-packet`` all call ``apply_profile_to_workflow`` automatically
+when ``--assumptions`` is supplied, so conservative / aggressive scenario
+comparisons produce genuinely different simulation outcomes.
 
 Usage::
 
     from b2b_workflow_simulator.assumptions import (
-        AssumptionProfile, load_assumption_profile, save_assumption_profile
+        AssumptionProfile,
+        apply_profile_to_workflow,
+        load_assumption_profile,
+        save_assumption_profile,
     )
 
     profile = AssumptionProfile(
         num_cases=500, seed=1, implementation_cost=10_000.0,
-        description="Conservative estimate for board presentation"
+        ai_error_rate_multiplier=2.0,   # doubles every AI agent error rate
+        ai_cost_multiplier=1.5,         # increases AI execution costs by 50 %
+        description="Conservative estimate for board presentation",
     )
     save_assumption_profile(profile, "conservative.json")
-
     loaded = load_assumption_profile("conservative.json")
+
+    # Apply to a workflow before simulating (original not mutated):
+    from b2b_workflow_simulator.examples import invoice_processing
+    scaled_wf = apply_profile_to_workflow(
+        invoice_processing.build_after_workflow(), loaded
+    )
 """
 
 from __future__ import annotations
