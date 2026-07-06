@@ -18,7 +18,7 @@ keywords = [
     "roi-analysis",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Other Audience",
     "License :: OSI Approved :: MIT License",
@@ -38,7 +38,7 @@ dev = ["pytest>=7.0", "ruff>=0.4", "build>=1.0"]
 b2b-simulator = "b2b_workflow_simulator.cli:main"
 
 [project.urls]
-Repository = "https://github.com/example/B2B-Agentic-Workflow-Simulator"
+Repository = "https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator"
 
 [tool.setuptools.packages.find]
 where = ["src"]
