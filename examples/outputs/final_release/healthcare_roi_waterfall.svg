@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="346" viewBox="0 0 700 346">
+  <rect width="700" height="346" fill="#ffffff"/>
+  <text x="350" y="28" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#1a1a1a">ROI Waterfall: Prior Authorization — AI-Assisted Review</text>
+  <line x1="445.0" y1="50" x2="445.0" y2="266" stroke="#999" stroke-width="1"/>
+  <rect x="445.0" y="54" width="202.5" height="28" fill="#4472C4" rx="2"/>
+  <text x="214" y="73.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#1a1a1a">Baseline operating cost</text>
+  <text x="651.5" y="73.0" text-anchor="start" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#1a1a1a">+$27,882.25</text>
+  <rect x="445.0" y="90" width="125.2" height="28" fill="#70AD47" rx="2"/>
+  <text x="214" y="109.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a">Labor/execution savings</text>
+  <text x="574.2" y="109.0" text-anchor="start" font-family="Arial,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a">+$17,232.95</text>
+  <rect x="445.0" y="126" width="2.0" height="28" fill="#70AD47" rx="2"/>
+  <text x="214" y="145.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a">Failure reduction value</text>
+  <text x="449.7" y="145.0" text-anchor="start" font-family="Arial,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a">+$92.94</text>
+  <rect x="445.0" y="162" width="125.8" height="28" fill="#4472C4" rx="2"/>
+  <text x="214" y="181.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#1a1a1a">Pre-implementation savings</text>
+  <text x="574.8" y="181.0" text-anchor="start" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#1a1a1a">+$17,325.89</text>
+  <rect x="314.3" y="198" width="130.7" height="28" fill="#FF0000" rx="2"/>
+  <text x="214" y="217.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a">Implementation cost</text>
+  <text x="310.3" y="217.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="normal" fill="#1a1a1a">-$18,000.00</text>
+  <rect x="440.1" y="234" width="4.9" height="28" fill="#4472C4" rx="2"/>
+  <text x="214" y="253.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#1a1a1a">Net ROI</text>
+  <text x="436.1" y="253.0" text-anchor="end" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#1a1a1a">-$674.11</text>
+  <text x="220" y="286" font-family="Arial,sans-serif" font-size="9" fill="#666666">Simulation estimate. Validate against real operational data.</text>
+</svg>

@@ -1516,6 +1516,90 @@ def generate_example_gallery(output_dir: str) -> int:
     return 0
 
 
+def generate_release_examples(output_dir: str) -> int:
+    """Generate deterministic v1.0.0 reference outputs."""
+    from b2b_workflow_simulator.assumptions import AssumptionProfile
+    from b2b_workflow_simulator.calibration import (
+        build_calibration_template,
+        render_calibration_markdown,
+    )
+    from b2b_workflow_simulator.config_diff import config_diff_to_text
+    from b2b_workflow_simulator.configured_case_study import configured_case_study_readme
+    from b2b_workflow_simulator.scenario_config import (
+        apply_scenario_config,
+        load_scenario_config,
+    )
+    from b2b_workflow_simulator.scenario_matrix import (
+        build_scenario_matrix,
+        matrix_to_json,
+    )
+    from b2b_workflow_simulator.scenarios import get_scenario
+
+    dest = Path(output_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    slug = "healthcare-prior-authorization"
+    profile = AssumptionProfile(num_cases=300, seed=42, implementation_cost=18_000.0)
+
+    outcome = _run_before_after(slug, profile.num_cases, profile.seed, collect_events=False)
+    if outcome is None:
+        print(f"Failed to run {slug}", file=sys.stderr)
+        return 1
+    bwf, awf, before_r, after_r = outcome
+
+    snap = build_snapshot(
+        before_r.kpi, after_r.kpi,
+        implementation_cost=profile.implementation_cost,
+    )
+    (dest / "healthcare_executive_snapshot.txt").write_text(snapshot_to_text(snap))
+
+    (dest / "healthcare_workflow_before.mmd").write_text(to_mermaid(bwf))
+    (dest / "healthcare_workflow_after.mmd").write_text(to_mermaid(awf))
+
+    waterfall = build_roi_waterfall(
+        before_r.kpi, after_r.kpi, implementation_cost=profile.implementation_cost
+    )
+    (dest / "healthcare_roi_waterfall.svg").write_text(waterfall_to_svg(waterfall))
+
+    heatmap = build_bottleneck_heatmap(awf, after_r.kpi)
+    (dest / "healthcare_bottleneck_heatmap.svg").write_text(heatmap_to_svg(heatmap))
+
+    # Scenario matrix
+    for profile_name in ("base", "conservative"):
+        rows = build_scenario_matrix(profile_name=profile_name)
+        (dest / f"scenario_matrix_{profile_name}.json").write_text(matrix_to_json(rows))
+
+    # Calibration template
+    template = build_calibration_template(slug)
+    (dest / "calibration_healthcare.md").write_text(render_calibration_markdown(template))
+
+    # Config diff for small-plan config
+    configs_dir = Path(__file__).parent / "examples" / "data" / "configs"
+    small_plan_path = configs_dir / "healthcare-prior-auth-small-plan.json"
+    if small_plan_path.exists():
+        config = load_scenario_config(small_plan_path)
+        diff = build_config_diff(config)
+        (dest / "config_diff_healthcare_small_plan.txt").write_text(config_diff_to_text(diff))
+
+        # Configured case study README sample
+        bwf_c, awf_c = apply_scenario_config(config)
+        scenario = get_scenario(config.base_scenario_slug)
+        profiles = {
+            "base": scenario.default_assumption_profile,
+            "conservative": scenario.conservative_assumption_profile,
+            "aggressive": scenario.aggressive_assumption_profile,
+        }
+        p = profiles[config.profile_name]
+        br = SimulationRunner(seed=p.seed).run(bwf_c, p.num_cases, collect_events=False)
+        ar = SimulationRunner(seed=p.seed).run(awf_c, p.num_cases, collect_events=False)
+        readme_text = configured_case_study_readme(config, diff, br.kpi, ar.kpi)
+        (dest / "configured_case_study_readme_sample.md").write_text(readme_text)
+
+    print(f"Release examples written to {dest}/")
+    for f in sorted(dest.iterdir()):
+        print(f"  {f.name}")
+    return 0
+
+
 def _discover_sample_configs() -> list[Path]:
     """Return paths to all built-in sample config JSON files."""
     try:
@@ -2984,6 +3068,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", default=None, help="Write output to this file.",
     )
 
+    release_parser = subparsers.add_parser(
+        "generate-release-examples",
+        help="Generate deterministic v1.0.0 reference outputs.",
+    )
+    release_parser.add_argument(
+        "--output-dir", default="examples/outputs/final_release",
+        help="Directory for release outputs (default: examples/outputs/final_release).",
+    )
+
     return parser
 
 
@@ -3192,6 +3285,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "generate-example-gallery":
         return generate_example_gallery(args.output_dir)
+
+    if args.command == "generate-release-examples":
+        return generate_release_examples(args.output_dir)
 
     if args.command == "list-scenarios":
         return list_scenarios_cmd(args.category, args.fmt)

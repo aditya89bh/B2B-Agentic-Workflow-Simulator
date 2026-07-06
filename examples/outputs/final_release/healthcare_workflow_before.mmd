@@ -1,0 +1,25 @@
+flowchart LR
+    pa_intake[PA Intake & Logging\n[Human: admin_staff]]
+    clinical_review[Clinical Criteria Review\n[Human: clinical_reviewer]]
+    medical_director_review[Medical Director Peer Review\n[Human: medical_director]]
+    decision_draft[Decision Letter Draft\n[Human: admin_staff]]
+    approved([Authorization Approved\n[Human: admin_staff]])
+    denied_standard([Authorization Denied\n[Human: admin_staff]])
+    denied_expedited([Urgent Request Denied\n[Human: medical_director]])
+    incomplete_return([Returned: Incomplete Submission\n[Human: admin_staff]])
+
+    style pa_intake fill:#d4edda,stroke:#28a745
+    style approved fill:#f8f9fa,stroke:#6c757d
+    style denied_standard fill:#f8f9fa,stroke:#6c757d
+    style denied_expedited fill:#f8f9fa,stroke:#6c757d
+    style incomplete_return fill:#f8f9fa,stroke:#6c757d
+
+    pa_intake -->|85%| clinical_review
+    pa_intake -->|15%| incomplete_return
+    clinical_review -->|55%| decision_draft
+    clinical_review -->|38%| medical_director_review
+    clinical_review -->|7%| denied_standard
+    medical_director_review -->|70%| decision_draft
+    medical_director_review -->|30%| denied_expedited
+    decision_draft -->|72%| approved
+    decision_draft -->|28%| denied_standard

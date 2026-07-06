@@ -1,0 +1,54 @@
+================================================================
+EXECUTIVE SNAPSHOT: Prior Authorization — AI-Assisted Review
+================================================================
+
+DECISION
+----------------------------------------------------------------
+Recommended: the redesigned workflow reduces cost by $17,233 across the simulated volume while maintaining or improving completion rate.
+
+KPI SUMMARY
+----------------------------------------------------------------
+Metric                             Before        After
+------------------------------------------------------
+Completion rate                    86.3%       86.7%
+Failure rate                       13.7%       13.3%
+Avg cost / case              $     92.94 $     35.50
+Avg cycle time (min)                77.2        24.0
+Escalation rate                     0.0%       39.0%
+
+ROI SUMMARY
+----------------------------------------------------------------
+Total cost savings:  $17,232.95
+ROI percentage:      +61.8%
+Implementation cost: $18,000.00
+Payback:             ~313 cases
+
+TOP 3 BOTTLENECKS
+----------------------------------------------------------------
+  1. md_escalation (1,540 min total)
+  2. ai_criteria_match (1,312 min total)
+  3. approved (1,210 min total)
+
+TOP 3 RISKS
+----------------------------------------------------------------
+  1. AI escalation rate is 39.0% in the redesign; ensure enough human capacity is staffed to absorb escalations.
+
+TOP 3 RECOMMENDATIONS
+----------------------------------------------------------------
+  1. Proceed with a controlled pilot rollout.
+  2. Increase human capacity to absorb AI escalations.
+
+ASSUMPTIONS
+----------------------------------------------------------------
+  - Cases are simulated with randomly sampled durations; results reflect expected values.
+  - AI error rates and costs are taken from the workflow definition; update for your context.
+  - Implementation cost (if supplied) is a one-time investment; recurring AI platform costs should be factored in separately.
+  - The 'after' workflow may require process change management not captured in the simulation.
+
+WHAT TO VALIDATE NEXT
+----------------------------------------------------------------
+  - Run with arrival_interval to model realistic queueing (current run is unconstrained).
+  - Validate AI error rates against actual production data before commitment.
+  - Pilot with one team or one process variant before full rollout.
+  - Review SLA requirements against the simulated cycle time distribution.
+  - Confirm implementation cost estimate with engineering and vendor quotes.

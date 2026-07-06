@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="396" viewBox="0 0 720 396">
+  <rect width="720" height="396" fill="#ffffff"/>
+  <text x="360" y="22" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#1a1a1a">Bottleneck Heatmap: Prior Authorization — AI-Assisted Review</text>
+  <text x="250" y="50" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#333">Overall</text>
+  <text x="350" y="50" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#333">Duration</text>
+  <text x="450" y="50" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#333">Wait</text>
+  <text x="550" y="50" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#333">Failure</text>
+  <text x="650" y="50" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#333">Escalation</text>
+  <text x="194" y="80" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">AI Criteria Matching</text>
+  <rect x="202" y="62" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="250" y="80" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">54%</text>
+  <rect x="302" y="62" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="350" y="80" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">85%</text>
+  <rect x="402" y="62" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="80" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="62" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="550" y="80" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">41%</text>
+  <rect x="602" y="62" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="80" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="112" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">Medical Director Escalation Review</text>
+  <rect x="202" y="94" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="250" y="112" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">51%</text>
+  <rect x="302" y="94" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="350" y="112" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <rect x="402" y="94" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="112" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="94" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="550" y="112" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">6%</text>
+  <rect x="602" y="94" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="112" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="144" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">AI Decision Letter Generation</text>
+  <rect x="202" y="126" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="250" y="144" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">49%</text>
+  <rect x="302" y="126" width="96" height="28" fill="#e57c00" rx="3"/>
+  <text x="350" y="144" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">61%</text>
+  <rect x="402" y="126" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="144" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="126" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="550" y="144" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">59%</text>
+  <rect x="602" y="126" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="144" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="176" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">AI Intake &amp; Extraction</text>
+  <rect x="202" y="158" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="250" y="176" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">47%</text>
+  <rect x="302" y="158" width="96" height="28" fill="#70ad47" rx="3"/>
+  <text x="350" y="176" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">31%</text>
+  <rect x="402" y="158" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="176" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="158" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="550" y="176" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <rect x="602" y="158" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="176" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="208" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">Authorization Approved</text>
+  <rect x="202" y="190" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="250" y="208" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">47%</text>
+  <rect x="302" y="190" width="96" height="28" fill="#e57c00" rx="3"/>
+  <text x="350" y="208" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">79%</text>
+  <rect x="402" y="190" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="208" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="190" width="96" height="28" fill="#70ad47" rx="3"/>
+  <text x="550" y="208" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">24%</text>
+  <rect x="602" y="190" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="208" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="240" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">Automated Denial</text>
+  <rect x="202" y="222" width="96" height="28" fill="#70ad47" rx="3"/>
+  <text x="250" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">30%</text>
+  <rect x="302" y="222" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="350" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">50%</text>
+  <rect x="402" y="222" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="222" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="550" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="602" y="222" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="240" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="272" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">Escalated Denial</text>
+  <rect x="202" y="254" width="96" height="28" fill="#70ad47" rx="3"/>
+  <text x="250" y="272" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">28%</text>
+  <rect x="302" y="254" width="96" height="28" fill="#f0c040" rx="3"/>
+  <text x="350" y="272" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">44%</text>
+  <rect x="402" y="254" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="272" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="254" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="550" y="272" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="602" y="254" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="272" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="194" y="304" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">Returned: Incomplete</text>
+  <rect x="202" y="286" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="250" y="304" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">18%</text>
+  <rect x="302" y="286" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="350" y="304" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">17%</text>
+  <rect x="402" y="286" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="450" y="304" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">0%</text>
+  <rect x="502" y="286" width="96" height="28" fill="#d4edda" rx="3"/>
+  <text x="550" y="304" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">6%</text>
+  <rect x="602" y="286" width="96" height="28" fill="#b22222" rx="3"/>
+  <text x="650" y="304" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#1a1a1a">100%</text>
+  <text x="200" y="328" font-family="Arial,sans-serif" font-size="9" fill="#666">Colors: critical ≥80% | high ≥60% | moderate ≥40% | low ≥20% | minimal</text>
+</svg>

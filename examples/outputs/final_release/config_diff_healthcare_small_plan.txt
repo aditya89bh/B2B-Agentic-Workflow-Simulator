@@ -1,0 +1,19 @@
+================================================================
+CONFIG DIFF: healthcare-prior-auth-small-plan
+Base scenario: healthcare-prior-authorization  Profile: base
+================================================================
+
+Actor changes:
+  clinical_reviewer.hourly_cost: 75.0 → 62.0
+  clinical_reviewer.error_rate: 0.04 → 0.06
+  medical_director.hourly_cost: 220.0 → 180.0
+  admin_staff.hourly_cost: 32.0 → 28.0
+
+Node changes:
+  pa_intake.base_duration_minutes: 20.0 → 25.0
+  clinical_review.base_duration_minutes: 35.0 → 40.0
+
+Edge probability changes:
+  clinical_review → decision_draft: 0.55 → 0.50 (-0.05)
+  clinical_review → medical_director_review: 0.38 → 0.40 (+0.02)
+  clinical_review → denied_standard: 0.07 → 0.10 (+0.03)

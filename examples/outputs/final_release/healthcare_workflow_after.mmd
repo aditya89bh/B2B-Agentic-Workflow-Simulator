@@ -1,0 +1,25 @@
+flowchart LR
+    ai_intake[AI Intake & Extraction\n[AI: ai_intake]]
+    ai_criteria_match[AI Criteria Matching\n[AI: ai_criteria]]
+    md_escalation[Medical Director Escalation Review\n[Human: medical_director]]
+    ai_decision_letter[AI Decision Letter Generation\n[AI: ai_criteria]]
+    approved([Authorization Approved\n[Human: admin_staff]])
+    denied_auto([Automated Denial\n[Human: admin_staff]])
+    denied_escalated([Escalated Denial\n[Human: medical_director]])
+    incomplete_return([Returned: Incomplete\n[Human: admin_staff]])
+
+    style ai_intake fill:#d4edda,stroke:#28a745
+    style approved fill:#f8f9fa,stroke:#6c757d
+    style denied_auto fill:#f8f9fa,stroke:#6c757d
+    style denied_escalated fill:#f8f9fa,stroke:#6c757d
+    style incomplete_return fill:#f8f9fa,stroke:#6c757d
+
+    ai_intake -->|88%| ai_criteria_match
+    ai_intake -->|12%| incomplete_return
+    ai_criteria_match -->|60%| ai_decision_letter
+    ai_criteria_match -->|28%| md_escalation
+    ai_criteria_match -->|12%| denied_auto
+    md_escalation -->|65%| ai_decision_letter
+    md_escalation -->|35%| denied_escalated
+    ai_decision_letter -->|74%| approved
+    ai_decision_letter -->|26%| denied_auto

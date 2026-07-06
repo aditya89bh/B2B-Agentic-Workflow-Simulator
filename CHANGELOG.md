@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.0.0 — Release Hardening (Phase 10)
+
+First production-stable release.  See `docs/release_notes.md` for a
+complete summary.  This phase adds no new simulation engines or scenario
+categories; it focuses entirely on polish, packaging, documentation, and
+validation.
+
+- **Package version** bumped to `1.0.0`; `Development Status :: 5 - Production/Stable`.
+- **`--version` CLI flag** (`b2b-workflow-simulator 1.0.0`).
+- **`__init__.py` public API**: stable convenience imports for
+  `SimulationRunner`, `AssumptionProfile`, `ScenarioConfig`, `get_scenario`,
+  `list_scenarios`.
+- **README** rewritten for external visitors: hero summary, quickstart,
+  limitations, all capability sections, architecture overview.
+- **MkDocs documentation site** (`mkdocs.yml`, `docs/index.md`,
+  `docs/quickstart.md`, `docs/concepts.md`, `docs/cli_reference.md`,
+  `docs/walkthrough.md`, `docs/limitations.md`, `docs/contributing.md`,
+  `docs/consultant_outputs.md`, `docs/release_notes.md`).
+- **Complete CLI reference** (`docs/cli_reference.md`) covering all 46+
+  commands grouped by purpose.
+- **Golden-path walkthrough** (`docs/walkthrough.md`) — complete 10-step
+  engagement using `healthcare-prior-authorization`.
+- **`generate-release-examples` command** — deterministic v1.0.0 reference
+  outputs under `examples/outputs/final_release/`.
+- **`examples/README.md`** — explains all example categories, assumption
+  profiles, and configs.
+- **`RELEASE_CHECKLIST.md`** — pre-release verification checklist.
+- **GitHub Actions workflows**: `docs.yml` (MkDocs strict build) and
+  `release.yml` (tag-triggered artifact build with version verification).
+- **Docs extra** in `pyproject.toml`: `pip install -e ".[docs]"` installs
+  `mkdocs` and `mkdocs-material`.
+- **`Documentation` and `Changelog` URLs** added to `pyproject.toml`.
+- **Documentation consistency tests** verifying all CLI commands appear in
+  `docs/cli_reference.md`, scenarios in docs, and key release files exist.
+- **Release smoke tests** covering the external user experience from
+  `--version` through all major CLI commands.
+- **Package version tests** verifying `__version__`, CLI output, and
+  `pyproject.toml` all agree.
+
 ## Phase 9 — Scenario Customization and Calibration Toolkit
 
 Adds a full customization and calibration layer so users can adapt any
