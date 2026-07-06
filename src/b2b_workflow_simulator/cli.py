@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from b2b_workflow_simulator.ai_adoption import assess_ai_adoption, generate_ai_adoption_report
+from b2b_workflow_simulator.assumptions import AssumptionProfile, load_assumption_profile
 from b2b_workflow_simulator.capacity_planning import (
     DEFAULT_OVERLOAD_THRESHOLD,
     DEFAULT_TARGET_UTILIZATION,
@@ -33,6 +34,7 @@ from b2b_workflow_simulator.executive_report import (
 )
 from b2b_workflow_simulator.export import diff_to_csv, diff_to_json, events_to_json, kpi_to_json
 from b2b_workflow_simulator.growth import GrowthConfig, generate_growth_report, project_growth
+from b2b_workflow_simulator.heatmap import build_bottleneck_heatmap, heatmap_to_svg, heatmap_to_text
 from b2b_workflow_simulator.html_report import (
     render_ai_adoption_html,
     render_capacity_html,
@@ -57,6 +59,7 @@ from b2b_workflow_simulator.monte_carlo import (
 )
 from b2b_workflow_simulator.org_health import compute_org_health, generate_org_health_report
 from b2b_workflow_simulator.org_report import OrgDigitalTwinReport, generate_org_digital_twin_report
+from b2b_workflow_simulator.packet import generate_packet
 from b2b_workflow_simulator.policy import evaluate_policies, generate_policy_report
 from b2b_workflow_simulator.pool import ActorPool
 from b2b_workflow_simulator.portfolio import RANK_BY_OPTIONS, WorkflowPortfolio
@@ -85,6 +88,13 @@ from b2b_workflow_simulator.sensitivity_grid import (
 from b2b_workflow_simulator.shared_resources import RESOURCE_TYPE_LABELS
 from b2b_workflow_simulator.simulation import ENGINES, SimulationRunner
 from b2b_workflow_simulator.sla import evaluate_sla
+from b2b_workflow_simulator.snapshot import build_snapshot, snapshot_to_html, snapshot_to_text
+from b2b_workflow_simulator.visualization import compare_mermaid, compare_text, to_mermaid, to_text
+from b2b_workflow_simulator.waterfall import (
+    build_roi_waterfall,
+    waterfall_to_svg,
+    waterfall_to_text,
+)
 from b2b_workflow_simulator.workflow_io import load_workflow, save_workflow
 
 EXPORT_FORMATS = ("json", "csv")
@@ -161,6 +171,7 @@ def _run_before_after(
     seed: int | None,
     arrival_interval_minutes: float | None = None,
     engine: str = "simple",
+    collect_events: bool = True,
 ):
     """Build and simulate both variants of a bundled example.
 
@@ -177,10 +188,16 @@ def _run_before_after(
     after_workflow = build_after()
 
     before_result = SimulationRunner(seed=seed).run(
-        before_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes, engine=engine
+        before_workflow, num_cases,
+        arrival_interval_minutes=arrival_interval_minutes,
+        engine=engine,
+        collect_events=collect_events,
     )
     after_result = SimulationRunner(seed=seed).run(
-        after_workflow, num_cases, arrival_interval_minutes=arrival_interval_minutes, engine=engine
+        after_workflow, num_cases,
+        arrival_interval_minutes=arrival_interval_minutes,
+        engine=engine,
+        collect_events=collect_events,
     )
     return before_workflow, after_workflow, before_result, after_result
 
@@ -1089,6 +1106,253 @@ def org_executive_report(
     return 0
 
 
+def _load_profile(path: str | None) -> AssumptionProfile:
+    """Load profile from path, or return the default base profile."""
+    if path is None:
+        return AssumptionProfile()
+    try:
+        return load_assumption_profile(path)
+    except (OSError, ValueError) as exc:
+        print(f"Failed to load assumption profile '{path}': {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+def visualize_workflow(
+    example_name: str, variant: str, fmt: str, output: str | None
+) -> int:
+    """Render a bundled workflow as Mermaid or plain text."""
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+    if fmt == "mermaid":
+        content = to_mermaid(workflow)
+    elif fmt == "compare":
+        build_before, build_after = EXAMPLES[example_name]
+        content = (
+            compare_mermaid(build_before(), build_after())
+            if fmt == "compare"
+            else compare_text(build_before(), build_after())
+        )
+    else:
+        content = to_text(workflow)
+    if output:
+        Path(output).write_text(content)
+        print(f"Written to {output}")
+    else:
+        print(content)
+    return 0
+
+
+def roi_waterfall(
+    example_name: str,
+    num_cases: int,
+    seed: int,
+    implementation_cost: float | None,
+    fmt: str,
+    output: str | None,
+    assumptions_path: str | None,
+) -> int:
+    """Run a bundled example and render an ROI waterfall."""
+    profile = _load_profile(assumptions_path)
+    effective_cases = num_cases if num_cases != 200 else profile.num_cases
+    effective_seed = seed if seed != 42 else profile.seed
+    effective_impl = (
+        implementation_cost if implementation_cost is not None
+        else profile.implementation_cost
+    )
+
+    outcome = _run_before_after(example_name, effective_cases, effective_seed)
+    if outcome is None:
+        return 1
+    _before_wf, _after_wf, before_result, after_result = outcome
+    waterfall = build_roi_waterfall(
+        before_result.kpi, after_result.kpi,
+        implementation_cost=effective_impl,
+        currency=profile.currency_label,
+    )
+    if fmt == "svg":
+        content = waterfall_to_svg(waterfall)
+    else:
+        content = waterfall_to_text(waterfall)
+
+    if output:
+        Path(output).write_text(content)
+        print(f"Written to {output}")
+    else:
+        print(content)
+    return 0
+
+
+def bottleneck_heatmap(
+    example_name: str,
+    variant: str,
+    num_cases: int,
+    seed: int,
+    arrival_interval: float | None,
+    fmt: str,
+    output: str | None,
+    assumptions_path: str | None,
+) -> int:
+    """Run a bundled example variant and render a bottleneck heatmap."""
+    profile = _load_profile(assumptions_path)
+    effective_cases = num_cases if num_cases != 200 else profile.num_cases
+    effective_seed = seed if seed != 42 else profile.seed
+    effective_interval = (
+        arrival_interval if arrival_interval is not None
+        else profile.arrival_interval_minutes
+    )
+
+    workflow = _select_variant(example_name, variant)
+    if workflow is None:
+        return 1
+    result = SimulationRunner(seed=effective_seed).run(
+        workflow, effective_cases,
+        arrival_interval_minutes=effective_interval,
+        collect_events=False,
+    )
+    heatmap = build_bottleneck_heatmap(workflow, result.kpi)
+    if fmt == "svg":
+        content = heatmap_to_svg(heatmap)
+    else:
+        content = heatmap_to_text(heatmap)
+
+    if output:
+        Path(output).write_text(content)
+        print(f"Written to {output}")
+    else:
+        print(content)
+    return 0
+
+
+def executive_snapshot(
+    example_name: str,
+    num_cases: int,
+    seed: int,
+    implementation_cost: float | None,
+    arrival_interval: float | None,
+    html_output: str | None,
+    assumptions_path: str | None,
+) -> int:
+    """Run both variants of a bundled example and print a concise snapshot."""
+    profile = _load_profile(assumptions_path)
+    effective_cases = num_cases if num_cases != 200 else profile.num_cases
+    effective_seed = seed if seed != 42 else profile.seed
+    effective_impl = (
+        implementation_cost if implementation_cost is not None
+        else profile.implementation_cost
+    )
+    effective_interval = (
+        arrival_interval if arrival_interval is not None
+        else profile.arrival_interval_minutes
+    )
+
+    outcome = _run_before_after(
+        example_name, effective_cases, effective_seed,
+        arrival_interval_minutes=effective_interval,
+    )
+    if outcome is None:
+        return 1
+    _before_wf, _after_wf, before_result, after_result = outcome
+    snapshot = build_snapshot(
+        before_result.kpi, after_result.kpi,
+        implementation_cost=effective_impl,
+    )
+    print(snapshot_to_text(snapshot))
+    if html_output:
+        Path(html_output).write_text(snapshot_to_html(snapshot))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def consultant_packet(
+    example_name: str,
+    num_cases: int,
+    seed: int,
+    implementation_cost: float | None,
+    output_dir: str,
+    assumptions_path: str | None,
+) -> int:
+    """Generate a full stakeholder packet directory for a bundled example."""
+    profile = _load_profile(assumptions_path)
+    effective_cases = num_cases if num_cases != 200 else profile.num_cases
+    effective_seed = seed if seed != 42 else profile.seed
+    effective_impl = (
+        implementation_cost if implementation_cost is not None
+        else profile.implementation_cost
+    )
+    profile = AssumptionProfile(
+        num_cases=effective_cases,
+        seed=effective_seed,
+        implementation_cost=effective_impl,
+        currency_label=profile.currency_label,
+        description=profile.description,
+        ai_error_rate_multiplier=profile.ai_error_rate_multiplier,
+        ai_cost_multiplier=profile.ai_cost_multiplier,
+        human_hourly_cost_multiplier=profile.human_hourly_cost_multiplier,
+        collect_events=False,
+    )
+
+    outcome = _run_before_after(example_name, effective_cases, effective_seed,
+                                collect_events=False)
+    if outcome is None:
+        return 1
+    before_wf, after_wf, before_result, after_result = outcome
+
+    dest = Path(output_dir)
+    files = generate_packet(
+        example_name, before_wf, after_wf, before_result, after_result,
+        profile, dest,
+    )
+    print(f"Consultant packet written to {dest}/")
+    for filename in sorted(files):
+        print(f"  {filename}")
+    return 0
+
+
+def generate_example_gallery(output_dir: str) -> int:
+    """Generate deterministic example outputs for the gallery."""
+    from b2b_workflow_simulator.assumptions import AssumptionProfile
+
+    dest = Path(output_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    examples_cfg = [
+        ("sales-lead-qualification",      "sales_lead_snapshot.txt"),
+        ("invoice-processing",            "invoice_processing_snapshot.txt"),
+        ("customer-support-ticket-resolution", "customer_support_snapshot.txt"),
+    ]
+    profile = AssumptionProfile(num_cases=300, seed=42, implementation_cost=8000.0)
+
+    for example_name, snapshot_file in examples_cfg:
+        outcome = _run_before_after(example_name, profile.num_cases, profile.seed,
+                                    collect_events=False)
+        if outcome is None:
+            continue
+        _before_wf, _after_wf, before_result, after_result = outcome
+        snap = build_snapshot(
+            before_result.kpi, after_result.kpi,
+            implementation_cost=profile.implementation_cost,
+        )
+        (dest / snapshot_file).write_text(snapshot_to_text(snap))
+
+    inv_outcome = _run_before_after("invoice-processing", profile.num_cases, profile.seed,
+                                    collect_events=False)
+    if inv_outcome is not None:
+        _bwf, _awf, _br, inv_after = inv_outcome
+        waterfall = build_roi_waterfall(
+            _br.kpi, inv_after.kpi,
+            implementation_cost=profile.implementation_cost,
+        )
+        (dest / "invoice_processing_roi_waterfall.svg").write_text(waterfall_to_svg(waterfall))
+        heatmap = build_bottleneck_heatmap(_awf, inv_after.kpi)
+        (dest / "invoice_processing_bottleneck_heatmap.svg").write_text(heatmap_to_svg(heatmap))
+
+    print(f"Example gallery outputs written to {dest}/")
+    for f in sorted(dest.iterdir()):
+        print(f"  {f.name}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="b2b-simulator",
@@ -1933,6 +2197,108 @@ def build_parser() -> argparse.ArgumentParser:
         help="If set, also write a static HTML executive report to this path.",
     )
 
+    # ------------------------------------------------------------------
+    # Phase 7: visualization, waterfall, heatmap, snapshot, packet
+    # ------------------------------------------------------------------
+
+    vis_parser = subparsers.add_parser(
+        "visualize-workflow",
+        help="Render a bundled workflow as a Mermaid flowchart or plain-text graph.",
+    )
+    vis_parser.add_argument("name", choices=sorted(EXAMPLES),
+                            help="Name of the bundled example.")
+    vis_parser.add_argument("--variant", choices=("before", "after", "compare"),
+                            default="after",
+                            help="Variant to render: before, after, or compare (default: after).")
+    vis_parser.add_argument("--format", choices=("mermaid", "text"),
+                            default="mermaid",
+                            help="Output format: mermaid (default) or text.")
+    vis_parser.add_argument("--output", default=None,
+                            help="If set, write output to this file instead of stdout.")
+
+    waterfall_parser = subparsers.add_parser(
+        "roi-waterfall",
+        help="Run a bundled example and show a decomposed ROI waterfall.",
+    )
+    waterfall_parser.add_argument("name", choices=sorted(EXAMPLES),
+                                  help="Name of the bundled example.")
+    waterfall_parser.add_argument("--cases", type=int, default=200,
+                                  help="Number of cases to simulate (default: 200).")
+    waterfall_parser.add_argument("--seed", type=int, default=42,
+                                  help="Random seed (default: 42).")
+    waterfall_parser.add_argument("--implementation-cost", type=float, default=None,
+                                  help="One-time implementation cost.")
+    waterfall_parser.add_argument("--format", choices=("text", "svg"), default="text",
+                                  help="Output format: text (default) or svg.")
+    waterfall_parser.add_argument("--output", default=None,
+                                  help="If set, write output to this file.")
+    waterfall_parser.add_argument("--assumptions", default=None,
+                                  help="Path to an assumption profile JSON file.")
+
+    heatmap_parser = subparsers.add_parser(
+        "bottleneck-heatmap",
+        help="Run a bundled example and show a bottleneck pressure heatmap.",
+    )
+    heatmap_parser.add_argument("name", choices=sorted(EXAMPLES),
+                                help="Name of the bundled example.")
+    heatmap_parser.add_argument("--variant", choices=("before", "after"), default="after",
+                                help="Variant to analyze (default: after).")
+    heatmap_parser.add_argument("--cases", type=int, default=200,
+                                help="Number of cases to simulate (default: 200).")
+    heatmap_parser.add_argument("--seed", type=int, default=42,
+                                help="Random seed (default: 42).")
+    heatmap_parser.add_argument("--arrival-interval", type=float, default=None,
+                                help="Minutes between case arrivals.")
+    heatmap_parser.add_argument("--format", choices=("text", "svg"), default="text",
+                                help="Output format: text (default) or svg.")
+    heatmap_parser.add_argument("--output", default=None,
+                                help="If set, write output to this file.")
+    heatmap_parser.add_argument("--assumptions", default=None,
+                                help="Path to an assumption profile JSON file.")
+
+    snapshot_parser = subparsers.add_parser(
+        "executive-snapshot",
+        help="Run a bundled example and print a concise one-page stakeholder snapshot.",
+    )
+    snapshot_parser.add_argument("name", choices=sorted(EXAMPLES),
+                                 help="Name of the bundled example.")
+    snapshot_parser.add_argument("--cases", type=int, default=200,
+                                 help="Number of cases to simulate (default: 200).")
+    snapshot_parser.add_argument("--seed", type=int, default=42,
+                                 help="Random seed (default: 42).")
+    snapshot_parser.add_argument("--implementation-cost", type=float, default=None,
+                                 help="One-time implementation cost.")
+    snapshot_parser.add_argument("--arrival-interval", type=float, default=None,
+                                 help="Minutes between case arrivals.")
+    snapshot_parser.add_argument("--html-output", default=None,
+                                 help="If set, also write an HTML snapshot to this path.")
+    snapshot_parser.add_argument("--assumptions", default=None,
+                                 help="Path to an assumption profile JSON file.")
+
+    packet_parser = subparsers.add_parser(
+        "consultant-packet",
+        help="Generate a full stakeholder packet directory for a bundled example.",
+    )
+    packet_parser.add_argument("name", choices=sorted(EXAMPLES),
+                               help="Name of the bundled example.")
+    packet_parser.add_argument("--cases", type=int, default=200,
+                               help="Number of cases to simulate (default: 200).")
+    packet_parser.add_argument("--seed", type=int, default=42,
+                               help="Random seed (default: 42).")
+    packet_parser.add_argument("--implementation-cost", type=float, default=None,
+                               help="One-time implementation cost.")
+    packet_parser.add_argument("--output-dir", default="packet",
+                               help="Directory to write the packet into (default: ./packet).")
+    packet_parser.add_argument("--assumptions", default=None,
+                               help="Path to an assumption profile JSON file.")
+
+    gallery_parser = subparsers.add_parser(
+        "generate-example-gallery",
+        help="Generate deterministic example output files for the docs gallery.",
+    )
+    gallery_parser.add_argument("--output-dir", default="examples/outputs",
+                                help="Directory for gallery files (default: examples/outputs).")
+
     return parser
 
 
@@ -2105,6 +2471,41 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "org-executive-report":
         return org_executive_report(args.cases, args.seed, args.html_output)
+
+    if args.command == "visualize-workflow":
+        return visualize_workflow(args.name, args.variant, args.format, args.output)
+
+    if args.command == "roi-waterfall":
+        return roi_waterfall(
+            args.name, args.cases, args.seed,
+            args.implementation_cost, args.format, args.output,
+            getattr(args, "assumptions", None),
+        )
+
+    if args.command == "bottleneck-heatmap":
+        return bottleneck_heatmap(
+            args.name, args.variant, args.cases, args.seed,
+            args.arrival_interval, args.format, args.output,
+            getattr(args, "assumptions", None),
+        )
+
+    if args.command == "executive-snapshot":
+        return executive_snapshot(
+            args.name, args.cases, args.seed,
+            args.implementation_cost, args.arrival_interval,
+            args.html_output,
+            getattr(args, "assumptions", None),
+        )
+
+    if args.command == "consultant-packet":
+        return consultant_packet(
+            args.name, args.cases, args.seed,
+            args.implementation_cost, args.output_dir,
+            getattr(args, "assumptions", None),
+        )
+
+    if args.command == "generate-example-gallery":
+        return generate_example_gallery(args.output_dir)
 
     parser.print_help()
     return 1
