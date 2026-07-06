@@ -47,6 +47,20 @@ Generate a static HTML redesign report.
 b2b-simulator html-report-example invoice-processing --output report.html
 ```
 
+### `save-example`
+Save the before/after workflow definitions of a bundled example as JSON.
+
+```bash
+b2b-simulator save-example invoice-processing --output-dir workflows/
+```
+
+### `load-example`
+Load a workflow definition from JSON and print its simulated KPI summary.
+
+```bash
+b2b-simulator load-example workflows/invoice-processing-after.json --cases 200
+```
+
 ---
 
 ## Portfolio and uncertainty
