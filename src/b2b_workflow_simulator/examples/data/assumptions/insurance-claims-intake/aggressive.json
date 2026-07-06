@@ -1,0 +1,13 @@
+{
+  "num_cases": 400,
+  "seed": 42,
+  "arrival_interval_minutes": null,
+  "implementation_cost": 22000.0,
+  "engine": "simple",
+  "collect_events": false,
+  "currency_label": "$",
+  "description": "insurance-claims-intake: aggressive (mature AI platform)",
+  "ai_error_rate_multiplier": 1.0,
+  "ai_cost_multiplier": 0.55,
+  "human_hourly_cost_multiplier": 0.9
+}

@@ -1,0 +1,13 @@
+{
+  "num_cases": 500,
+  "seed": 42,
+  "arrival_interval_minutes": null,
+  "implementation_cost": 12000.0,
+  "engine": "simple",
+  "collect_events": false,
+  "currency_label": "$",
+  "description": "hr-recruiting-screening: aggressive (lower AI and human costs)",
+  "ai_error_rate_multiplier": 1.0,
+  "ai_cost_multiplier": 0.5,
+  "human_hourly_cost_multiplier": 0.85
+}
