@@ -145,8 +145,82 @@ def load_assumption_profile(path: str | Path) -> AssumptionProfile:
     return AssumptionProfile.from_dict(data)
 
 
+def apply_profile_to_workflow(workflow, profile: AssumptionProfile):
+    """Return a new ``Workflow`` with actor parameters scaled by profile multipliers.
+
+    The **original workflow is never mutated**.  A new ``Workflow`` instance is
+    returned with the following transformations applied to each actor:
+
+    - ``AIAgentActor``: ``error_rate *= ai_error_rate_multiplier``,
+      ``cost_per_execution *= ai_cost_multiplier``.
+      ``error_rate`` is capped at 1.0.
+    - ``HumanActor``: ``hourly_cost *= human_hourly_cost_multiplier``.
+    - ``ActorPool`` workers: each ``Worker.hourly_cost *= human_hourly_cost_multiplier``.
+    - All other actor types: copied unchanged.
+
+    When all three multipliers are 1.0, the original workflow is returned as-is
+    (identity fast-path — no allocation).
+
+    Args:
+        workflow: A validated ``Workflow`` to copy and scale.
+        profile: The assumption profile whose multipliers to apply.
+
+    Returns:
+        A new ``Workflow`` with scaled actor parameters, or the original if all
+        multipliers are 1.0.
+    """
+    from dataclasses import replace as dc_replace
+
+    from b2b_workflow_simulator.pool import ActorPool
+    from b2b_workflow_simulator.primitives.ai_agent import AIAgentActor
+    from b2b_workflow_simulator.primitives.human import HumanActor
+    from b2b_workflow_simulator.workflow import Workflow
+
+    ai_err = profile.ai_error_rate_multiplier
+    ai_cost = profile.ai_cost_multiplier
+    human_cost = profile.human_hourly_cost_multiplier
+
+    if ai_err == 1.0 and ai_cost == 1.0 and human_cost == 1.0:
+        return workflow
+
+    new_wf = Workflow(
+        workflow_id=workflow.workflow_id,
+        name=workflow.name,
+        entry_node_id=workflow.entry_node_id,
+        description=workflow.description,
+    )
+
+    for actor in workflow.actors.values():
+        if isinstance(actor, AIAgentActor):
+            new_actor = dc_replace(
+                actor,
+                error_rate=min(1.0, actor.error_rate * ai_err),
+                cost_per_execution=actor.cost_per_execution * ai_cost,
+            )
+        elif isinstance(actor, HumanActor):
+            new_actor = dc_replace(actor, hourly_cost=actor.hourly_cost * human_cost)
+        elif isinstance(actor, ActorPool):
+            scaled_workers = [
+                dc_replace(w, hourly_cost=w.hourly_cost * human_cost)
+                for w in actor.workers
+            ]
+            new_actor = dc_replace(actor, workers=scaled_workers)
+        else:
+            new_actor = actor
+        new_wf.add_actor(new_actor)
+
+    for node in workflow.nodes.values():
+        new_wf.add_node(node)
+
+    for edge in workflow.edges:
+        new_wf.add_edge(edge)
+
+    return new_wf
+
+
 __all__ = [
     "AssumptionProfile",
+    "apply_profile_to_workflow",
     "load_assumption_profile",
     "save_assumption_profile",
 ]
