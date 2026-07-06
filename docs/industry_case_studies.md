@@ -7,20 +7,28 @@ conservative, aggressive) and can generate a full case study directory.
 
 ```
 case_studies/<scenario_slug>/
-  README.md                          — overview, assumptions, and reproduction commands
-  executive_snapshot_base.txt        — one-page summary (base profile)
-  executive_snapshot_conservative.txt
-  executive_snapshot_aggressive.txt
-  roi_waterfall_base.svg             — ROI decomposition chart
-  bottleneck_heatmap_base.svg        — node pressure heatmap
-  workflow_before.mmd                — Mermaid flowchart (before)
-  workflow_after.mmd                 — Mermaid flowchart (after)
-  assumptions_base.json              — simulation parameters used
-  assumptions_conservative.json
-  assumptions_aggressive.json
-  kpi_summary_base.json              — structured KPI output
-  kpi_summary_conservative.json
-  kpi_summary_aggressive.json
+  README.md                               — overview, assumptions, and reproduction commands
+  executive_snapshot_base.txt             — one-page summary (base profile)
+  executive_snapshot_conservative.txt     — one-page summary (conservative profile)
+  executive_snapshot_aggressive.txt       — one-page summary (aggressive profile)
+  roi_waterfall_base.svg                  — ROI decomposition chart (base profile)
+  bottleneck_heatmap_base.svg             — node pressure heatmap (base profile)
+  workflow_before.mmd                     — Mermaid flowchart (before)
+  workflow_after.mmd                      — Mermaid flowchart (after)
+  assumptions_base.json                   — simulation parameters (base)
+  assumptions_conservative.json           — simulation parameters (conservative)
+  assumptions_aggressive.json             — simulation parameters (aggressive)
+  kpi_summary_base.json                   — structured KPI output (base)
+  kpi_summary_conservative.json           — structured KPI output (conservative)
+  kpi_summary_aggressive.json             — structured KPI output (aggressive)
+  consultant_packet_base/                 — full consultant packet (base profile)
+    README.md, executive_snapshot.txt, executive_snapshot.html,
+    workflow_before.mmd, workflow_after.mmd, roi_waterfall.svg,
+    bottleneck_heatmap.svg, assumptions.json, kpi_summary.json, recommendations.txt
+  consultant_packet_conservative/         — full consultant packet (conservative profile)
+    (same files as above)
+  consultant_packet_aggressive/           — full consultant packet (aggressive profile)
+    (same files as above)
 ```
 
 ## Generating case studies
