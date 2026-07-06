@@ -154,57 +154,134 @@ class OrgHealthScore:
         return None
 
 
-def _utilization_balance_score(kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
-    """Score 0-100: how balanced is actor utilization across all workflows?
+def _utilization_balance_score(
+    kpi_results: dict[str, KPIResult],
+    shared_resources: SharedResourcePool | None,
+) -> tuple[float, str]:
+    """Score 0-100: how balanced is actor and shared-resource utilization?
 
-    Penalises both overload (>90%) and underuse (<30%).
+    Penalises both actor overload (>90%), actor underuse (<30%), and shared
+    resource overload (contention_ratio > 1.0).
     """
     all_utils: list[float] = []
     for kpi in kpi_results.values():
         all_utils.extend(kpi.actor_utilization.values())
         all_utils.extend(kpi.pool_utilization.values())
+
+    actor_note = ""
     if not all_utils:
-        return 70.0, "No capacity utilization data available; default score applied."
-    overloaded = sum(1 for u in all_utils if u > 0.9)
-    underused = sum(1 for u in all_utils if u < 0.3)
-    total = len(all_utils)
-    penalty = ((overloaded + underused) / total) * 100.0
-    score = max(0.0, 100.0 - penalty)
-    explanation = (
-        f"{overloaded}/{total} actor(s) overloaded (>90%), "
-        f"{underused}/{total} underutilized (<30%)."
-    )
-    return score, explanation
+        base_score = 70.0
+        actor_note = "No capacity utilization data available. "
+    else:
+        overloaded = sum(1 for u in all_utils if u > 0.9)
+        underused = sum(1 for u in all_utils if u < 0.3)
+        total = len(all_utils)
+        penalty = ((overloaded + underused) / total) * 100.0
+        base_score = max(0.0, 100.0 - penalty)
+        actor_note = (
+            f"{overloaded}/{total} actor(s) overloaded (>90%), "
+            f"{underused}/{total} underutilized (<30%). "
+        )
+
+    resource_note = ""
+    resource_penalty = 0.0
+    if shared_resources is not None:
+        bottlenecks = shared_resources.bottleneck_resources()
+        at_risk = shared_resources.at_risk_resources()
+        if bottlenecks:
+            resource_penalty = min(30.0, len(bottlenecks) * 10.0)
+            names = ", ".join(c.resource_name for c in bottlenecks[:3])
+            resource_note = f"Shared resource bottleneck(s): {names}."
+        elif at_risk:
+            resource_penalty = min(15.0, len(at_risk) * 5.0)
+            resource_note = f"{len(at_risk)} shared resource(s) at moderate/high contention risk."
+
+    score = max(0.0, base_score - resource_penalty)
+    return score, (actor_note + resource_note).strip() or "No utilization issues detected."
 
 
-def _queue_pressure_score(kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
-    """Score 0-100: how much time do cases spend waiting vs. working?"""
+def _queue_pressure_score(
+    kpi_results: dict[str, KPIResult],
+    shared_resources: SharedResourcePool | None,
+) -> tuple[float, str]:
+    """Score 0-100: how much time do cases spend waiting vs. working?
+
+    Also considers shared resource overload as an additional queue pressure signal.
+    """
     total_duration = sum(kpi.total_duration_minutes for kpi in kpi_results.values())
     total_wait = sum(kpi.total_wait_minutes for kpi in kpi_results.values())
     if total_duration == 0:
-        return 75.0, "No duration data available; default score applied."
-    wait_fraction = total_wait / total_duration
-    score = max(0.0, 100.0 - wait_fraction * 200.0)
-    explanation = (
-        f"Total wait time is {total_wait:,.0f} min out of "
-        f"{total_duration:,.0f} min total duration "
-        f"({wait_fraction:.1%} wait fraction)."
-    )
-    return score, explanation
+        base_score = 75.0
+        base_note = "No duration data available; default score applied."
+    else:
+        wait_fraction = total_wait / total_duration
+        base_score = max(0.0, 100.0 - wait_fraction * 200.0)
+        base_note = (
+            f"Total wait time is {total_wait:,.0f} min out of "
+            f"{total_duration:,.0f} min total duration "
+            f"({wait_fraction:.1%} wait fraction)."
+        )
+
+    resource_penalty = 0.0
+    resource_note = ""
+    if shared_resources is not None:
+        critical = [c for c in shared_resources.all_contentions() if c.overload_risk == "critical"]
+        high_risk = [c for c in shared_resources.all_contentions() if c.overload_risk == "high"]
+        if critical:
+            resource_penalty = min(20.0, len(critical) * 10.0)
+            resource_note = (
+                f" {len(critical)} shared resource(s) critically overloaded "
+                "(demand exceeds capacity), adding upstream queue pressure."
+            )
+        elif high_risk:
+            resource_penalty = min(10.0, len(high_risk) * 5.0)
+            resource_note = (
+                f" {len(high_risk)} shared resource(s) at high contention risk."
+            )
+
+    score = max(0.0, base_score - resource_penalty)
+    return score, base_note + resource_note
 
 
-def _budget_pressure_score(org_budget: OrgBudget | None) -> tuple[float, str]:
-    """Score 0-100: how healthy is the budget position?"""
+def _budget_pressure_score(
+    org_budget: OrgBudget | None,
+    growth_projection: GrowthProjection | None = None,
+) -> tuple[float, str]:
+    """Score 0-100: how healthy is the budget position?
+
+    Considers both current utilization/overruns and, when a growth projection
+    is supplied, whether budget breaking points are forecast within 6 months.
+    """
     if org_budget is None:
-        return 75.0, "No budget data provided; default score applied."
-    pressure = org_budget.budget_pressure_score()
-    score = max(0.0, 100.0 - pressure)
-    overruns = org_budget.overrun_departments()
-    explanation = (
-        f"Overall budget utilization: {org_budget.overall_utilization:.1%}. "
-        + (f"{len(overruns)} department(s) over budget." if overruns else "No overruns.")
-    )
-    return score, explanation
+        base_score = 75.0
+        base_note = "No budget data provided; default score applied."
+    else:
+        pressure = org_budget.budget_pressure_score()
+        base_score = max(0.0, 100.0 - pressure)
+        overruns = org_budget.overrun_departments()
+        base_note = (
+            f"Overall budget utilization: {org_budget.overall_utilization:.1%}. "
+            + (f"{len(overruns)} department(s) over budget." if overruns else "No overruns.")
+        )
+
+    growth_penalty = 0.0
+    growth_note = ""
+    if growth_projection is not None:
+        budget_bps = [
+            bp for bp in growth_projection.breaking_points()
+            if bp.month <= 6 and bp.breaking_point_reason
+            and "budget" in (bp.breaking_point_reason or "").lower()
+        ]
+        if budget_bps:
+            first = budget_bps[0]
+            growth_penalty = min(20.0, len(budget_bps) * 7.0)
+            growth_note = (
+                f" Budget breaking point projected at month {first.month}: "
+                f"{first.breaking_point_reason}"
+            )
+
+    score = max(0.0, base_score - growth_penalty)
+    return score, base_note + growth_note
 
 
 def _compliance_risk_score(kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
@@ -222,23 +299,47 @@ def _compliance_risk_score(kpi_results: dict[str, KPIResult]) -> tuple[float, st
     return score, explanation
 
 
-def _sla_risk_score(kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
-    """Score 0-100: proxy for SLA risk based on average cycle time distribution."""
+def _sla_risk_score(
+    kpi_results: dict[str, KPIResult],
+    growth_projection: GrowthProjection | None,
+) -> tuple[float, str]:
+    """Score 0-100: proxy for SLA risk from cycle time, escalations, and growth.
+
+    When a growth projection is supplied, any breaking points within 6 months
+    apply a forward-looking penalty: workflows are projected to miss SLAs as
+    demand outpaces capacity.
+    """
     all_avg_cts: list[float] = [
         kpi.avg_cycle_time_minutes for kpi in kpi_results.values() if kpi.total_cases > 0
     ]
     if not all_avg_cts:
-        return 75.0, "No cycle time data available; default score applied."
-    max_ct = max(all_avg_cts)
-    escalation_total = sum(kpi.total_escalations for kpi in kpi_results.values())
-    total_cases = sum(kpi.total_cases for kpi in kpi_results.values())
-    esc_rate = escalation_total / total_cases if total_cases > 0 else 0.0
-    score = max(0.0, 100.0 - esc_rate * 100.0 - (max_ct / 1000.0) * 5.0)
-    explanation = (
-        f"Peak average cycle time: {max_ct:,.1f} min. "
-        f"Escalation rate: {esc_rate:.1%}."
-    )
-    return score, explanation
+        base_score = 75.0
+        base_note = "No cycle time data available; default score applied."
+    else:
+        max_ct = max(all_avg_cts)
+        escalation_total = sum(kpi.total_escalations for kpi in kpi_results.values())
+        total_cases = sum(kpi.total_cases for kpi in kpi_results.values())
+        esc_rate = escalation_total / total_cases if total_cases > 0 else 0.0
+        base_score = max(0.0, 100.0 - esc_rate * 100.0 - (max_ct / 1000.0) * 5.0)
+        base_note = (
+            f"Peak average cycle time: {max_ct:,.1f} min. "
+            f"Escalation rate: {esc_rate:.1%}."
+        )
+
+    growth_penalty = 0.0
+    growth_note = ""
+    if growth_projection is not None:
+        near_term_bps = [bp for bp in growth_projection.breaking_points() if bp.month <= 6]
+        if near_term_bps:
+            first = near_term_bps[0]
+            growth_penalty = min(25.0, len(near_term_bps) * 8.0)
+            growth_note = (
+                f" Growth breaking point at month {first.month} threatens SLA attainment: "
+                f"{first.breaking_point_reason}"
+            )
+
+    score = max(0.0, base_score - growth_penalty)
+    return score, base_note + growth_note
 
 
 def _ai_readiness_score(org: Organization, kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
@@ -262,7 +363,11 @@ _SPOF_UTILIZATION_THRESHOLD = 0.8
 _SINGLE_ROLE_DEPT_PENALTY = 15.0
 
 
-def _spof_score(org: Organization, kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
+def _spof_score(
+    org: Organization,
+    kpi_results: dict[str, KPIResult],
+    shared_resources: SharedResourcePool | None,
+) -> tuple[float, str]:
     """Score 0-100: inverse of single-point-of-failure exposure.
 
     Combines two signals:
@@ -289,10 +394,24 @@ def _spof_score(org: Organization, kpi_results: dict[str, KPIResult]) -> tuple[f
 
     util_penalty = (spof_count / max(total, 1)) * 80.0
     dept_penalty = (single_role_depts / max(n_depts, 1)) * _SINGLE_ROLE_DEPT_PENALTY
-    score = max(0.0, 100.0 - util_penalty - dept_penalty)
+
+    resource_penalty = 0.0
+    resource_note = ""
+    if shared_resources is not None:
+        bottlenecks = shared_resources.bottleneck_resources()
+        if bottlenecks:
+            resource_penalty = min(20.0, len(bottlenecks) * 10.0)
+            names = ", ".join(c.resource_name for c in bottlenecks[:2])
+            resource_note = (
+                f" Shared resource SPOF(s): {names} "
+                f"(demand exceeds capacity — no backup path exists)."
+            )
+
+    score = max(0.0, 100.0 - util_penalty - dept_penalty - resource_penalty)
     explanation = (
         f"{spof_count}/{max(total, 0)} actor(s) above {_SPOF_UTILIZATION_THRESHOLD:.0%} "
         f"utilization; {single_role_depts}/{n_depts} dept(s) have single-role coverage."
+        + resource_note
     )
     return score, explanation
 
@@ -331,24 +450,27 @@ def compute_org_health(
         org: The organization to score.
         org_budget: Optional budget model; improves budget pressure
             accuracy when provided.
-        shared_resources: Optional shared resource pool; not currently
-            used in scoring but reserved for future refinement.
+        shared_resources: Optional shared resource pool.  When provided,
+            shared resource contention signals are incorporated into the
+            utilization balance, queue pressure, and single-point-of-failure
+            dimensions.
         kpi_results: KPI results keyed by workflow ID, used for
             utilization, queue pressure, compliance proxy, and SLA proxy.
-        growth_projection: Optional growth forecast; reserved for future
-            refinement.
+        growth_projection: Optional growth forecast.  When provided,
+            breaking-point projections influence the SLA risk, budget
+            pressure, and queue pressure dimensions.
 
     Returns:
         An :class:`OrgHealthScore` with 8 :class:`HealthFactor` objects.
     """
     factor_data = [
-        (UTILIZATION_BALANCE, _utilization_balance_score(kpi_results)),
-        (QUEUE_PRESSURE, _queue_pressure_score(kpi_results)),
-        (BUDGET_PRESSURE, _budget_pressure_score(org_budget)),
+        (UTILIZATION_BALANCE, _utilization_balance_score(kpi_results, shared_resources)),
+        (QUEUE_PRESSURE, _queue_pressure_score(kpi_results, shared_resources)),
+        (BUDGET_PRESSURE, _budget_pressure_score(org_budget, growth_projection)),
         (COMPLIANCE_RISK, _compliance_risk_score(kpi_results)),
-        (SLA_RISK, _sla_risk_score(kpi_results)),
+        (SLA_RISK, _sla_risk_score(kpi_results, growth_projection)),
         (AI_READINESS, _ai_readiness_score(org, kpi_results)),
-        (SINGLE_POINT_OF_FAILURE, _spof_score(org, kpi_results)),
+        (SINGLE_POINT_OF_FAILURE, _spof_score(org, kpi_results, shared_resources)),
         (CROSS_TEAM_DEPENDENCY, _cross_team_dependency_score(org)),
     ]
     factors = [
