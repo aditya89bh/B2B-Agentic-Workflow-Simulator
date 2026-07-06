@@ -30,6 +30,9 @@ def _risk_label(score: float) -> str:
     return "Low"
 
 
+_VALID_PROFILES = frozenset({"base", "conservative", "aggressive"})
+
+
 def _run_matrix_row(scenario: ScenarioDefinition, profile_name: str) -> dict:
     """Run one scenario under the named profile and return a result dict."""
     profiles = {
@@ -37,7 +40,12 @@ def _run_matrix_row(scenario: ScenarioDefinition, profile_name: str) -> dict:
         "conservative": scenario.conservative_assumption_profile,
         "aggressive": scenario.aggressive_assumption_profile,
     }
-    profile = profiles.get(profile_name, scenario.default_assumption_profile)
+    if profile_name not in _VALID_PROFILES:
+        raise ValueError(
+            f"Invalid profile name {profile_name!r}. "
+            f"Must be one of: {', '.join(sorted(_VALID_PROFILES))}"
+        )
+    profile = profiles[profile_name]
     seed = profile.seed
     n = profile.num_cases
 
@@ -77,11 +85,20 @@ def build_scenario_matrix(
 
     Args:
         profile_name: ``"base"``, ``"conservative"``, or ``"aggressive"``.
+            Any other value raises :class:`ValueError`.
         scenario_slugs: Optional subset of scenario slugs.  Defaults to all.
 
     Returns:
         List of result dicts, sorted by descending ``total_cost_savings``.
+
+    Raises:
+        ValueError: If ``profile_name`` is not one of the three valid values.
     """
+    if profile_name not in _VALID_PROFILES:
+        raise ValueError(
+            f"Invalid profile name {profile_name!r}. "
+            f"Must be one of: {', '.join(sorted(_VALID_PROFILES))}"
+        )
     scenarios = list_scenarios()
     if scenario_slugs:
         scenarios = [s for s in scenarios if s.slug in scenario_slugs]
