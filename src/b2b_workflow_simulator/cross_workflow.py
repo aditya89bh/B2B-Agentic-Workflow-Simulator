@@ -127,7 +127,7 @@ class CrossWorkflowResult:
             return 0.0
         return self.total_cost / self.total_cases
 
-    def kpi_for(self, workflow_id: str):
+    def kpi_for(self, workflow_id: str) -> KPIResult:
         """Return the ``KPIResult`` for ``workflow_id``.
 
         Raises:
