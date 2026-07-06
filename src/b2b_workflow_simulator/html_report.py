@@ -21,6 +21,7 @@ from b2b_workflow_simulator.capacity_planning import (
 )
 from b2b_workflow_simulator.compliance import ComplianceReport
 from b2b_workflow_simulator.executive_report import ExecutiveAssessment
+from b2b_workflow_simulator.growth import GrowthProjection
 from b2b_workflow_simulator.monte_carlo import (
     COMPARISON_METRICS,
     KPI_METRICS,
@@ -32,6 +33,9 @@ from b2b_workflow_simulator.monte_carlo import (
     build_variability_summary,
     format_stat_value,
 )
+from b2b_workflow_simulator.org_health import OrgHealthScore
+from b2b_workflow_simulator.org_model import Organization
+from b2b_workflow_simulator.org_report import OrgDigitalTwinReport
 from b2b_workflow_simulator.policy import SEVERITY_ERROR, PolicyEvaluation
 from b2b_workflow_simulator.portfolio import WorkflowPortfolio
 from b2b_workflow_simulator.recommendation import RecommendationSet
@@ -847,7 +851,7 @@ def _health_factor_row(factor) -> str:
     )
 
 
-def render_org_health_html(health_score) -> str:
+def render_org_health_html(health_score: OrgHealthScore) -> str:
     """Render an ``OrgHealthScore`` as a standalone HTML report."""
     rows = "".join(
         _health_factor_row(f) for f in sorted(health_score.factors, key=lambda f: f.score)
@@ -876,7 +880,7 @@ def render_org_health_html(health_score) -> str:
     return _page(f"{health_score.org_name} - Org Health Score", body)
 
 
-def render_org_budget_html(org, org_budget) -> str:
+def render_org_budget_html(org: Organization, org_budget) -> str:
     """Render an ``OrgBudget`` as a standalone HTML budget analysis report."""
     dept_rows = []
     for dept_id, budget in org_budget.dept_budgets.items():
@@ -919,7 +923,7 @@ def render_org_budget_html(org, org_budget) -> str:
     return _page(f"{org.name} - Budget Analysis", body)
 
 
-def render_org_growth_html(projection) -> str:
+def render_org_growth_html(projection: GrowthProjection) -> str:
     """Render a ``GrowthProjection`` as a standalone HTML growth report."""
     rows = []
     for p in projection.points:
@@ -968,7 +972,7 @@ def _bp_callout(first_bp) -> str:
     )
 
 
-def render_org_executive_html(report) -> str:
+def render_org_executive_html(report: OrgDigitalTwinReport) -> str:
     """Render an ``OrgDigitalTwinReport`` as a single standalone HTML document."""
     org = report.org
 
