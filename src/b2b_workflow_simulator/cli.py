@@ -12,6 +12,11 @@ from b2b_workflow_simulator.assumptions import (
     apply_profile_to_workflow,
     load_assumption_profile,
 )
+from b2b_workflow_simulator.calibration import (
+    build_calibration_template,
+    render_calibration_json,
+    render_calibration_markdown,
+)
 from b2b_workflow_simulator.capacity_planning import (
     DEFAULT_OVERLOAD_THRESHOLD,
     DEFAULT_TARGET_UTILIZATION,
@@ -21,6 +26,12 @@ from b2b_workflow_simulator.capacity_planning import (
 )
 from b2b_workflow_simulator.case_studies import generate_all_case_studies, generate_case_study
 from b2b_workflow_simulator.compliance import evaluate_compliance, generate_compliance_report
+from b2b_workflow_simulator.config_diff import (
+    build_config_diff,
+    config_diff_to_json,
+    config_diff_to_text,
+)
+from b2b_workflow_simulator.configured_case_study import generate_configured_case_study
 from b2b_workflow_simulator.cross_workflow import CrossWorkflowSimulator, WorkflowRunConfig
 from b2b_workflow_simulator.examples import (
     customer_onboarding_implementation,
@@ -89,6 +100,12 @@ from b2b_workflow_simulator.restructuring import (
     generate_restructuring_report,
 )
 from b2b_workflow_simulator.risk import compute_risk, generate_risk_report
+from b2b_workflow_simulator.scenario_config import (
+    ConfigValidationError,
+    apply_scenario_config,
+    load_scenario_config,
+    validate_scenario_config,
+)
 from b2b_workflow_simulator.scenario_matrix import (
     build_scenario_matrix,
     matrix_to_json,
@@ -1499,6 +1516,259 @@ def generate_example_gallery(output_dir: str) -> int:
     return 0
 
 
+def _discover_sample_configs() -> list[Path]:
+    """Return paths to all built-in sample config JSON files."""
+    try:
+        pkg_dir = Path(__file__).parent / "examples" / "data" / "configs"
+        if pkg_dir.is_dir():
+            return sorted(pkg_dir.glob("*.json"))
+    except Exception:
+        pass
+    return []
+
+
+def _load_config_or_exit(path: str):
+    """Load a config file, printing an error and exiting on failure."""
+    try:
+        return load_scenario_config(path)
+    except (FileNotFoundError, ConfigValidationError) as exc:
+        print(f"Error loading config {path!r}: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+def list_configs_cmd(fmt: str) -> int:
+    """List all built-in sample scenario configuration files."""
+    import json as _json
+    configs = []
+    for path in _discover_sample_configs():
+        try:
+            config = load_scenario_config(path)
+            configs.append(config)
+        except Exception:
+            continue
+
+    if fmt == "json":
+        data = [
+            {
+                "configured_slug": c.configured_slug,
+                "configured_name": c.configured_name,
+                "base_scenario_slug": c.base_scenario_slug,
+                "client_name": c.client_name,
+                "profile_name": c.profile_name,
+                "description": c.description,
+            }
+            for c in configs
+        ]
+        print(_json.dumps(data, indent=2))
+        return 0
+
+    if not configs:
+        print("No sample configs found.")
+        return 0
+
+    col_slug = max(len(c.configured_slug) for c in configs) + 2
+    col_base = max(len(c.base_scenario_slug) for c in configs) + 2
+    print(f"{'Config Slug':<{col_slug}} {'Base Scenario':<{col_base}} {'Client'}")
+    print("-" * 80)
+    for c in configs:
+        print(f"{c.configured_slug:<{col_slug}} {c.base_scenario_slug:<{col_base}} {c.client_name}")
+    print(f"\n{len(configs)} sample config(s). Pass a path to config CLI commands.")
+    return 0
+
+
+def validate_config_cmd(config_path: str) -> int:
+    """Validate a scenario config file."""
+    config = _load_config_or_exit(config_path)
+    try:
+        warnings = validate_scenario_config(config)
+        print(f"Valid: {config.configured_slug}")
+        print(f"  Base scenario: {config.base_scenario_slug}")
+        print(f"  Profile: {config.profile_name}")
+        print(f"  Actor overrides: {len(config.actor_overrides)}")
+        print(f"  Node overrides: {len(config.node_overrides)}")
+        print(f"  Edge overrides: {len(config.edge_overrides)}")
+        if warnings:
+            print("Warnings:")
+            for w in warnings:
+                print(f"  - {w}")
+        return 0
+    except ConfigValidationError as exc:
+        print(f"Invalid: {exc}", file=sys.stderr)
+        return 1
+
+
+def run_config_cmd(config_path: str) -> int:
+    """Run configured before/after and print KPI table."""
+    config = _load_config_or_exit(config_path)
+    try:
+        before_wf, after_wf = apply_scenario_config(config)
+    except ConfigValidationError as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 1
+    from b2b_workflow_simulator.scenarios import get_scenario
+    scenario = get_scenario(config.base_scenario_slug)
+    profiles = {
+        "base": scenario.default_assumption_profile,
+        "conservative": scenario.conservative_assumption_profile,
+        "aggressive": scenario.aggressive_assumption_profile,
+    }
+    profile = profiles[config.profile_name]
+    before_r = SimulationRunner(seed=profile.seed).run(
+        before_wf, profile.num_cases, collect_events=False
+    )
+    after_r = SimulationRunner(seed=profile.seed).run(
+        after_wf, profile.num_cases, collect_events=False
+    )
+    print(f"Config: {config.configured_slug}  ({config.configured_name})")
+    print(f"Base: {config.base_scenario_slug}  Profile: {config.profile_name}")
+    print()
+    _print_kpi_table(before_r.kpi, after_r.kpi)
+    return 0
+
+
+def compare_config_cmd(config_path: str) -> int:
+    """Run configured before/after and print full ROI report."""
+    config = _load_config_or_exit(config_path)
+    try:
+        before_wf, after_wf = apply_scenario_config(config)
+    except ConfigValidationError as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 1
+    from b2b_workflow_simulator.scenarios import get_scenario
+    scenario = get_scenario(config.base_scenario_slug)
+    profiles = {
+        "base": scenario.default_assumption_profile,
+        "conservative": scenario.conservative_assumption_profile,
+        "aggressive": scenario.aggressive_assumption_profile,
+    }
+    profile = profiles[config.profile_name]
+    before_r = SimulationRunner(seed=profile.seed).run(
+        before_wf, profile.num_cases, collect_events=False
+    )
+    after_r = SimulationRunner(seed=profile.seed).run(
+        after_wf, profile.num_cases, collect_events=False
+    )
+    diff = compare_workflows(before_r.kpi, after_r.kpi, profile.implementation_cost)
+    print(f"Config: {config.configured_slug}")
+    print()
+    print(generate_report(diff))
+    return 0
+
+
+def config_snapshot_cmd(config_path: str, html_output: str | None) -> int:
+    """Generate executive snapshot from a configured scenario."""
+    config = _load_config_or_exit(config_path)
+    try:
+        before_wf, after_wf = apply_scenario_config(config)
+    except ConfigValidationError as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 1
+    from b2b_workflow_simulator.scenarios import get_scenario
+    scenario = get_scenario(config.base_scenario_slug)
+    profiles = {
+        "base": scenario.default_assumption_profile,
+        "conservative": scenario.conservative_assumption_profile,
+        "aggressive": scenario.aggressive_assumption_profile,
+    }
+    profile = profiles[config.profile_name]
+    before_r = SimulationRunner(seed=profile.seed).run(
+        before_wf, profile.num_cases, collect_events=False
+    )
+    after_r = SimulationRunner(seed=profile.seed).run(
+        after_wf, profile.num_cases, collect_events=False
+    )
+    snap = build_snapshot(
+        before_r.kpi, after_r.kpi, implementation_cost=profile.implementation_cost
+    )
+    print(snapshot_to_text(snap))
+    if html_output:
+        Path(html_output).write_text(snapshot_to_html(snap))
+        print(f"\nHTML report written to {html_output}")
+    return 0
+
+
+def config_packet_cmd(config_path: str, output_dir: str) -> int:
+    """Generate consultant packet from a configured scenario."""
+    config = _load_config_or_exit(config_path)
+    try:
+        before_wf, after_wf = apply_scenario_config(config)
+    except ConfigValidationError as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 1
+    from b2b_workflow_simulator.scenarios import get_scenario
+    scenario = get_scenario(config.base_scenario_slug)
+    profiles = {
+        "base": scenario.default_assumption_profile,
+        "conservative": scenario.conservative_assumption_profile,
+        "aggressive": scenario.aggressive_assumption_profile,
+    }
+    profile = profiles[config.profile_name]
+    before_r = SimulationRunner(seed=profile.seed).run(
+        before_wf, profile.num_cases, collect_events=False
+    )
+    after_r = SimulationRunner(seed=profile.seed).run(
+        after_wf, profile.num_cases, collect_events=False
+    )
+    dest = Path(output_dir)
+    files = generate_packet(
+        config.configured_slug, before_wf, after_wf, before_r, after_r, profile, dest
+    )
+    print(f"Consultant packet written to {dest}/")
+    for fn in sorted(files):
+        print(f"  {fn}")
+    return 0
+
+
+def config_case_study_cmd(config_path: str, output_dir: str) -> int:
+    """Generate configured case study directory."""
+    config = _load_config_or_exit(config_path)
+    try:
+        files = generate_configured_case_study(config, Path(output_dir))
+        print(f"Configured case study written to {output_dir}/")
+        for fn in sorted(files):
+            print(f"  {fn}")
+        return 0
+    except ConfigValidationError as exc:
+        print(f"Config error: {exc}", file=sys.stderr)
+        return 1
+
+
+def config_diff_cmd(config_path: str, fmt: str, output: str | None) -> int:
+    """Show what changed from the base scenario."""
+    config = _load_config_or_exit(config_path)
+    diff = build_config_diff(config)
+    if fmt == "json":
+        content = config_diff_to_json(diff)
+    else:
+        content = config_diff_to_text(diff)
+    if output:
+        Path(output).write_text(content)
+        print(f"Written to {output}")
+    else:
+        print(content)
+    return 0
+
+
+def calibration_template_cmd(scenario_slug: str, fmt: str, output: str | None) -> int:
+    """Generate a calibration questionnaire for a scenario."""
+    if scenario_slug not in EXAMPLES:
+        from b2b_workflow_simulator.scenarios import scenario_names
+        available = ", ".join(sorted(scenario_names()))
+        print(f"Unknown scenario {scenario_slug!r}. Available: {available}", file=sys.stderr)
+        return 1
+    template = build_calibration_template(scenario_slug)
+    if fmt == "json":
+        content = render_calibration_json(template)
+    else:
+        content = render_calibration_markdown(template)
+    if output:
+        Path(output).write_text(content)
+        print(f"Written to {output}")
+    else:
+        print(content)
+    return 0
+
+
 def list_scenarios_cmd(category: str | None, fmt: str) -> int:
     """List all registered scenarios."""
     scenarios = (
@@ -2637,6 +2907,77 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show only this scenario slug.  Omit for all scenarios.",
     )
 
+    # ------------------------------------------------------------------
+    # Phase 9: scenario customization and calibration commands
+    # ------------------------------------------------------------------
+
+    list_configs_parser = subparsers.add_parser(
+        "list-configs", help="List all built-in sample scenario configuration files.",
+    )
+    list_configs_parser.add_argument(
+        "--format", dest="fmt", choices=("text", "json"), default="text",
+    )
+
+    validate_config_parser = subparsers.add_parser(
+        "validate-config", help="Validate a scenario configuration file.",
+    )
+    validate_config_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+
+    run_config_parser = subparsers.add_parser(
+        "run-config", help="Run configured before/after workflows and print KPI table.",
+    )
+    run_config_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+
+    compare_config_parser = subparsers.add_parser(
+        "compare-config", help="Run configured workflows and print full ROI report.",
+    )
+    compare_config_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+
+    config_snapshot_parser = subparsers.add_parser(
+        "config-snapshot", help="Generate executive snapshot from a configured scenario.",
+    )
+    config_snapshot_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+    config_snapshot_parser.add_argument("--html-output", default=None,
+                                        help="Also write HTML snapshot to this path.")
+
+    config_packet_parser = subparsers.add_parser(
+        "config-packet", help="Generate consultant packet from a configured scenario.",
+    )
+    config_packet_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+    config_packet_parser.add_argument("--output-dir", default="packet",
+                                      help="Output directory (default: ./packet).")
+
+    config_case_study_parser = subparsers.add_parser(
+        "config-case-study", help="Generate configured case study directory.",
+    )
+    config_case_study_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+    config_case_study_parser.add_argument("--output-dir", default="case_study",
+                                          help="Output directory (default: ./case_study).")
+
+    config_diff_parser = subparsers.add_parser(
+        "config-diff", help="Show what changed from the base scenario.",
+    )
+    config_diff_parser.add_argument("config_path", help="Path to a ScenarioConfig JSON file.")
+    config_diff_parser.add_argument(
+        "--format", dest="fmt", choices=("text", "json"), default="text"
+    )
+    config_diff_parser.add_argument("--output", default=None, help="Write output to this file.")
+
+    calibration_parser = subparsers.add_parser(
+        "calibration-template",
+        help="Generate a calibration questionnaire for a scenario.",
+    )
+    calibration_parser.add_argument(
+        "scenario_slug", choices=sorted(EXAMPLES),
+        help="Scenario slug to generate questionnaire for.",
+    )
+    calibration_parser.add_argument(
+        "--format", dest="fmt", choices=("markdown", "json"), default="markdown",
+    )
+    calibration_parser.add_argument(
+        "--output", default=None, help="Write output to this file.",
+    )
+
     return parser
 
 
@@ -2854,6 +3195,33 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "scenario-matrix":
         return scenario_matrix_cmd(args.profile, args.fmt, args.output, args.scenario_slug)
+
+    if args.command == "list-configs":
+        return list_configs_cmd(args.fmt)
+
+    if args.command == "validate-config":
+        return validate_config_cmd(args.config_path)
+
+    if args.command == "run-config":
+        return run_config_cmd(args.config_path)
+
+    if args.command == "compare-config":
+        return compare_config_cmd(args.config_path)
+
+    if args.command == "config-snapshot":
+        return config_snapshot_cmd(args.config_path, args.html_output)
+
+    if args.command == "config-packet":
+        return config_packet_cmd(args.config_path, args.output_dir)
+
+    if args.command == "config-case-study":
+        return config_case_study_cmd(args.config_path, args.output_dir)
+
+    if args.command == "config-diff":
+        return config_diff_cmd(args.config_path, args.fmt, args.output)
+
+    if args.command == "calibration-template":
+        return calibration_template_cmd(args.scenario_slug, args.fmt, args.output)
 
     parser.print_help()
     return 1
