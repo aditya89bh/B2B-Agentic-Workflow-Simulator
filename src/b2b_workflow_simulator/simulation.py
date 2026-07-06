@@ -263,6 +263,7 @@ class SimulationRunner:
         arrival_interval_minutes: float | None = None,
         engine: str = "simple",
         arrival_model: ArrivalModel | None = None,
+        collect_events: bool = True,
     ) -> SimulationResult:
         """Simulate `num_cases` cases flowing through `workflow`.
 
@@ -279,10 +280,18 @@ class SimulationRunner:
             arrival_model: An `ArrivalModel` describing a richer arrival
                 pattern (uniform, batched, business-hour, or peak-hour).
                 Mutually exclusive with `arrival_interval_minutes`.
+            collect_events: When ``True`` (default), the returned
+                ``SimulationResult.events`` contains the full immutable
+                audit trail of every task start, completion, failure, and
+                queueing event.  Set to ``False`` for KPI-only runs (Monte
+                Carlo, sensitivity sweeps, large-scale experiments) where
+                the event log is not needed and its memory cost — roughly
+                9–10 ``Event`` objects per case — is undesirable.  KPI
+                calculations are identical regardless of this setting.
 
         Returns:
-            A `SimulationResult` containing the full event log and the
-            aggregated `KPIResult`.
+            A `SimulationResult` containing the aggregated `KPIResult` and,
+            when ``collect_events=True``, the full event log.
         """
         if num_cases <= 0:
             raise ValueError("num_cases must be a positive integer")
@@ -300,6 +309,7 @@ class SimulationRunner:
                 num_cases,
                 arrival_interval_minutes=arrival_interval_minutes,
                 arrival_model=arrival_model,
+                collect_events=collect_events,
             )
 
         arrival_times = resolve_arrival_times(
@@ -313,7 +323,10 @@ class SimulationRunner:
         for case_index in range(num_cases):
             case_id = f"case-{case_index + 1}"
             arrival_time = arrival_times[case_index] if arrival_times is not None else 0.0
-            self._run_case(workflow, case_id, arrival_time, events, kpi, scheduler, pool_scheduler)
+            self._run_case(
+                workflow, case_id, arrival_time, events, kpi, scheduler, pool_scheduler,
+                collect_events=collect_events,
+            )
 
         kpi.total_cases = num_cases
         if scheduler is not None:
@@ -331,10 +344,12 @@ class SimulationRunner:
         kpi: KPIResult,
         scheduler: ActorScheduler | None,
         pool_scheduler: PoolScheduler,
+        collect_events: bool = True,
     ) -> None:
         clock = arrival_time
         current_node_id = workflow.entry_node_id
-        events.append(Event(EventType.CASE_STARTED, clock, case_id))
+        if collect_events:
+            events.append(Event(EventType.CASE_STARTED, clock, case_id))
 
         while True:
             node = workflow.get_node(current_node_id)
@@ -363,7 +378,7 @@ class SimulationRunner:
                 kpi.actor_wait_minutes[actor.actor_id] = (
                     kpi.actor_wait_minutes.get(actor.actor_id, 0.0) + wait
                 )
-                if wait > 0:
+                if collect_events and wait > 0:
                     events.append(
                         Event(
                             EventType.TASK_QUEUED,
@@ -376,9 +391,10 @@ class SimulationRunner:
                     )
 
             kpi.node_visit_counts[node.node_id] = kpi.node_visit_counts.get(node.node_id, 0) + 1
-            events.append(
-                Event(EventType.TASK_STARTED, start, case_id, node.node_id, actor.actor_id, details)
-            )
+            if collect_events:
+                events.append(Event(
+                    EventType.TASK_STARTED, start, case_id, node.node_id, actor.actor_id, details
+                ))
 
             if self._rng.random() < scheduled.error_rate:
                 task.mark_failed(duration, cost, reason="actor_error")
@@ -386,23 +402,22 @@ class SimulationRunner:
                 kpi.node_failure_counts[node.node_id] = (
                     kpi.node_failure_counts.get(node.node_id, 0) + 1
                 )
-                events.append(
-                    Event(
-                        EventType.TASK_FAILED,
-                        end,
-                        case_id,
-                        node.node_id,
-                        actor.actor_id,
-                        {**details, "reason": "actor_error"},
-                    )
-                )
-                if tracks_capacity:
+                if collect_events:
                     events.append(
                         Event(
-                            EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id
+                            EventType.TASK_FAILED,
+                            end,
+                            case_id,
+                            node.node_id,
+                            actor.actor_id,
+                            {**details, "reason": "actor_error"},
                         )
                     )
-                events.append(Event(EventType.CASE_FAILED, end, case_id))
+                    if tracks_capacity:
+                        events.append(Event(
+                            EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id
+                        ))
+                    events.append(Event(EventType.CASE_FAILED, end, case_id))
                 kpi.failed_cases += 1
                 kpi.total_duration_minutes += end - arrival_time
                 return
@@ -410,23 +425,26 @@ class SimulationRunner:
             if scheduled.checks_escalation and self._rng.random() < scheduled.escalation_rate:
                 task.mark_escalated(duration, cost, reason="ai_escalation")
                 kpi.total_escalations += 1
-                events.append(
-                    Event(EventType.TASK_ESCALATED, end, case_id, node.node_id, actor.actor_id)
-                )
+                if collect_events:
+                    events.append(
+                        Event(EventType.TASK_ESCALATED, end, case_id, node.node_id, actor.actor_id)
+                    )
             else:
                 task.mark_completed(duration, cost)
-                events.append(
-                    Event(EventType.TASK_COMPLETED, end, case_id, node.node_id, actor.actor_id)
-                )
+                if collect_events:
+                    events.append(
+                        Event(EventType.TASK_COMPLETED, end, case_id, node.node_id, actor.actor_id)
+                    )
 
             record_task_totals(kpi, node.node_id, duration, cost)
-            if tracks_capacity:
+            if collect_events and tracks_capacity:
                 events.append(
                     Event(EventType.RESOURCE_RELEASED, end, case_id, node.node_id, actor.actor_id)
                 )
 
             if node.is_terminal:
-                events.append(Event(EventType.CASE_COMPLETED, end, case_id))
+                if collect_events:
+                    events.append(Event(EventType.CASE_COMPLETED, end, case_id))
                 kpi.completed_cases += 1
                 kpi.total_duration_minutes += end - arrival_time
                 return
