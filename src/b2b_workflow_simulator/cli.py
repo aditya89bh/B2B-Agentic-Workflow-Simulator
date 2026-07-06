@@ -19,12 +19,21 @@ from b2b_workflow_simulator.capacity_planning import (
     analyze_capacity,
     generate_capacity_report,
 )
+from b2b_workflow_simulator.case_studies import generate_all_case_studies, generate_case_study
 from b2b_workflow_simulator.compliance import evaluate_compliance, generate_compliance_report
 from b2b_workflow_simulator.cross_workflow import CrossWorkflowSimulator, WorkflowRunConfig
 from b2b_workflow_simulator.examples import (
+    customer_onboarding_implementation,
     customer_support_ticket_resolution,
+    finance_month_end_close,
     governance,
+    healthcare_prior_authorization,
+    hr_recruiting_screening,
+    insurance_claims_intake,
     invoice_processing,
+    it_support_triage,
+    legal_contract_review,
+    procurement_vendor_onboarding,
     sales_lead_qualification,
 )
 from b2b_workflow_simulator.examples.saas_org import (
@@ -80,6 +89,18 @@ from b2b_workflow_simulator.restructuring import (
     generate_restructuring_report,
 )
 from b2b_workflow_simulator.risk import compute_risk, generate_risk_report
+from b2b_workflow_simulator.scenario_matrix import (
+    build_scenario_matrix,
+    matrix_to_json,
+    matrix_to_text,
+)
+from b2b_workflow_simulator.scenarios import (
+    CATEGORY_LABELS,
+    SCENARIO_CATEGORIES,
+    list_scenarios,
+    scenario_exists,
+    scenarios_by_category,
+)
 from b2b_workflow_simulator.sensitivity import (
     PARAMETERS,
     format_sensitivity_table,
@@ -115,6 +136,39 @@ EXAMPLES = {
     "customer-support-ticket-resolution": (
         customer_support_ticket_resolution.build_before_workflow,
         customer_support_ticket_resolution.build_after_workflow,
+    ),
+    # Phase 8: Industry scenario library
+    "healthcare-prior-authorization": (
+        healthcare_prior_authorization.build_before_workflow,
+        healthcare_prior_authorization.build_after_workflow,
+    ),
+    "insurance-claims-intake": (
+        insurance_claims_intake.build_before_workflow,
+        insurance_claims_intake.build_after_workflow,
+    ),
+    "hr-recruiting-screening": (
+        hr_recruiting_screening.build_before_workflow,
+        hr_recruiting_screening.build_after_workflow,
+    ),
+    "procurement-vendor-onboarding": (
+        procurement_vendor_onboarding.build_before_workflow,
+        procurement_vendor_onboarding.build_after_workflow,
+    ),
+    "legal-contract-review": (
+        legal_contract_review.build_before_workflow,
+        legal_contract_review.build_after_workflow,
+    ),
+    "it-support-triage": (
+        it_support_triage.build_before_workflow,
+        it_support_triage.build_after_workflow,
+    ),
+    "finance-month-end-close": (
+        finance_month_end_close.build_before_workflow,
+        finance_month_end_close.build_after_workflow,
+    ),
+    "customer-onboarding-implementation": (
+        customer_onboarding_implementation.build_before_workflow,
+        customer_onboarding_implementation.build_after_workflow,
     ),
 }
 
@@ -1445,6 +1499,107 @@ def generate_example_gallery(output_dir: str) -> int:
     return 0
 
 
+def list_scenarios_cmd(category: str | None, fmt: str) -> int:
+    """List all registered scenarios."""
+    scenarios = (
+        scenarios_by_category(category) if category else list_scenarios()
+    )
+    if fmt == "json":
+        import json as _json
+        data = [
+            {
+                "slug": s.slug,
+                "name": s.name,
+                "category": CATEGORY_LABELS.get(s.category, s.category),
+                "description": s.description,
+                "target_users": s.target_users,
+                "recommended_commands": s.recommended_commands,
+            }
+            for s in scenarios
+        ]
+        print(_json.dumps(data, indent=2))
+        return 0
+
+    if not scenarios:
+        print("No scenarios found.")
+        return 0
+
+    current_cat = None
+    for s in scenarios:
+        cat_label = CATEGORY_LABELS.get(s.category, s.category)
+        if cat_label != current_cat:
+            if current_cat is not None:
+                print()
+            print(f"  {cat_label}")
+            print(f"  {'─' * len(cat_label)}")
+            current_cat = cat_label
+        print(f"    {s.slug:<42} {s.description[:55]}")
+    print()
+    print(f"Total: {len(scenarios)} scenario(s).  Use `b2b-simulator run-example <slug>` to run.")
+    return 0
+
+
+def generate_case_studies_cmd(
+    output_dir: str,
+    scenario_slug: str | None,
+    profiles: str,
+) -> int:
+    """Generate case study directories for all or one scenario."""
+    profile_list = [p.strip() for p in profiles.split(",")]
+    valid = {"base", "conservative", "aggressive"}
+    invalid = set(profile_list) - valid
+    if invalid:
+        print(
+            f"Invalid profile names: {invalid}. Use: base, conservative, aggressive",
+            file=sys.stderr,
+        )
+        return 1
+
+    if scenario_slug:
+        if not scenario_exists(scenario_slug):
+            from b2b_workflow_simulator.scenarios import scenario_names
+            print(
+                f"Unknown scenario '{scenario_slug}'. "
+                f"Available: {', '.join(scenario_names())}",
+                file=sys.stderr,
+            )
+            return 1
+        from b2b_workflow_simulator.scenarios import get_scenario
+        scenario = get_scenario(scenario_slug)
+        files = generate_case_study(scenario, Path(output_dir) / scenario_slug, profile_list)
+        print(f"Case study written to {Path(output_dir) / scenario_slug}/")
+        for fn in sorted(files):
+            print(f"  {fn}")
+    else:
+        results = generate_all_case_studies(Path(output_dir), profiles=profile_list)
+        print(f"Case studies written to {output_dir}/")
+        for slug in sorted(results):
+            print(f"  {slug}/ ({len(results[slug])} files)")
+    return 0
+
+
+def scenario_matrix_cmd(
+    profile_name: str,
+    fmt: str,
+    output: str | None,
+    scenario_slug: str | None,
+) -> int:
+    """Run scenario matrix comparison."""
+    slugs = [scenario_slug] if scenario_slug else None
+    rows = build_scenario_matrix(profile_name=profile_name, scenario_slugs=slugs)
+    if fmt == "json":
+        content = matrix_to_json(rows)
+    else:
+        content = matrix_to_text(rows)
+
+    if output:
+        Path(output).write_text(content)
+        print(f"Written to {output}")
+    else:
+        print(content)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="b2b-simulator",
@@ -2421,6 +2576,63 @@ def build_parser() -> argparse.ArgumentParser:
     gallery_parser.add_argument("--output-dir", default="examples/outputs",
                                 help="Directory for gallery files (default: examples/outputs).")
 
+    # ------------------------------------------------------------------
+    # Phase 8: scenario library commands
+    # ------------------------------------------------------------------
+
+    list_parser = subparsers.add_parser(
+        "list-scenarios",
+        help="List all registered simulation scenarios with category and description.",
+    )
+    list_parser.add_argument(
+        "--category", default=None, choices=sorted(SCENARIO_CATEGORIES),
+        help="Filter by category.",
+    )
+    list_parser.add_argument(
+        "--format", dest="fmt", choices=("text", "json"), default="text",
+        help="Output format: text (default) or json.",
+    )
+
+    case_studies_parser = subparsers.add_parser(
+        "generate-case-studies",
+        help="Generate full case study directories for all or one scenario.",
+    )
+    case_studies_parser.add_argument(
+        "--output-dir", default="case_studies",
+        help="Root directory to write case studies into (default: ./case_studies).",
+    )
+    case_studies_parser.add_argument(
+        "--scenario", default=None, dest="scenario_slug",
+        help="Generate only this scenario slug.  Omit for all scenarios.",
+    )
+    case_studies_parser.add_argument(
+        "--profiles", default="base,conservative,aggressive",
+        help="Comma-separated profile names: base, conservative, aggressive "
+             "(default: all three).",
+    )
+
+    matrix_parser = subparsers.add_parser(
+        "scenario-matrix",
+        help="Compare all scenarios at a high level for consulting prioritization.",
+    )
+    matrix_parser.add_argument(
+        "--profile", default="base",
+        choices=("base", "conservative", "aggressive"),
+        help="Assumption profile to use for all scenarios (default: base).",
+    )
+    matrix_parser.add_argument(
+        "--format", dest="fmt", choices=("text", "json"), default="text",
+        help="Output format: text (default) or json.",
+    )
+    matrix_parser.add_argument(
+        "--output", default=None,
+        help="If set, write output to this file instead of stdout.",
+    )
+    matrix_parser.add_argument(
+        "--scenario", default=None, dest="scenario_slug",
+        help="Show only this scenario slug.  Omit for all scenarios.",
+    )
+
     return parser
 
 
@@ -2629,6 +2841,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "generate-example-gallery":
         return generate_example_gallery(args.output_dir)
+
+    if args.command == "list-scenarios":
+        return list_scenarios_cmd(args.category, args.fmt)
+
+    if args.command == "generate-case-studies":
+        return generate_case_studies_cmd(args.output_dir, args.scenario_slug, args.profiles)
+
+    if args.command == "scenario-matrix":
+        return scenario_matrix_cmd(args.profile, args.fmt, args.output, args.scenario_slug)
 
     parser.print_help()
     return 1
