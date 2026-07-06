@@ -6,7 +6,7 @@
   "engine": "simple",
   "collect_events": false,
   "currency_label": "$",
-  "description": "Customer support - aggressive",
+  "description": "customer-support-ticket-resolution: aggressive",
   "ai_error_rate_multiplier": 1.0,
   "ai_cost_multiplier": 0.5,
   "human_hourly_cost_multiplier": 0.85

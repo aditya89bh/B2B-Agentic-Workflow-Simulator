@@ -6,7 +6,7 @@
   "engine": "simple",
   "collect_events": false,
   "currency_label": "$",
-  "description": "Invoice processing - base assumptions",
+  "description": "invoice-processing: base assumptions",
   "ai_error_rate_multiplier": 1.0,
   "ai_cost_multiplier": 1.0,
   "human_hourly_cost_multiplier": 1.0

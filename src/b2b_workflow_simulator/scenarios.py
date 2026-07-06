@@ -142,17 +142,17 @@ def _build_registry() -> dict[str, ScenarioDefinition]:
             after_builder=sales_lead_qualification.build_after_workflow,
             default_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=5000.0,
-                description="Sales lead qualification - base assumptions",
+                description="sales-lead-qualification: base assumptions",
             ),
             conservative_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=5000.0,
                 ai_error_rate_multiplier=2.0, ai_cost_multiplier=1.5,
-                description="Sales lead qualification - conservative (higher AI error)",
+                description="sales-lead-qualification: conservative (higher AI error)",
             ),
             aggressive_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=5000.0,
                 ai_cost_multiplier=0.6, human_hourly_cost_multiplier=0.9,
-                description="Sales lead qualification - aggressive (lower AI cost)",
+                description="sales-lead-qualification: aggressive (lower AI cost)",
             ),
             limitations=[
                 "Discovery call stage retained as human; AI quality cannot be modeled here.",
@@ -174,17 +174,17 @@ def _build_registry() -> dict[str, ScenarioDefinition]:
             after_builder=invoice_processing.build_after_workflow,
             default_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=8000.0,
-                description="Invoice processing - base assumptions",
+                description="invoice-processing: base assumptions",
             ),
             conservative_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=8000.0,
                 ai_error_rate_multiplier=2.0, ai_cost_multiplier=1.5,
-                description="Invoice processing - conservative",
+                description="invoice-processing: conservative",
             ),
             aggressive_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=8000.0,
                 ai_cost_multiplier=0.5, human_hourly_cost_multiplier=0.9,
-                description="Invoice processing - aggressive",
+                description="invoice-processing: aggressive",
             ),
             limitations=[
                 "Three-way match complexity not fully modeled; exception rates may vary.",
@@ -206,17 +206,17 @@ def _build_registry() -> dict[str, ScenarioDefinition]:
             after_builder=customer_support_ticket_resolution.build_after_workflow,
             default_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=6000.0,
-                description="Customer support - base assumptions",
+                description="customer-support-ticket-resolution: base assumptions",
             ),
             conservative_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=6000.0,
                 ai_error_rate_multiplier=2.5, ai_cost_multiplier=1.3,
-                description="Customer support - conservative (AI bot errors high)",
+                description="customer-support-ticket-resolution: conservative",
             ),
             aggressive_assumption_profile=AssumptionProfile(
                 num_cases=300, seed=42, implementation_cost=6000.0,
                 ai_cost_multiplier=0.5, human_hourly_cost_multiplier=0.85,
-                description="Customer support - aggressive",
+                description="customer-support-ticket-resolution: aggressive",
             ),
             limitations=[
                 "Customer sentiment and CSAT not modeled; AI deflection quality varies.",
