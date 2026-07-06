@@ -121,6 +121,18 @@ def test_org_resource_contention_days_option():
     assert ret == 0
 
 
+def test_org_resource_contention_shows_non_zero_ratios(capsys):
+    main(["org-resource-contention", "--cases", "100", "--seed", "1", "--days", "22"])
+    out = capsys.readouterr().out
+    ratios = [float(tok) for tok in out.split() if tok.replace(".", "", 1).isdigit()]
+    assert any(r > 0.0 for r in ratios), "Expected at least one non-zero contention ratio"
+
+
+def test_org_resource_contention_accepts_cases_and_seed():
+    ret = main(["org-resource-contention", "--cases", "50", "--seed", "7", "--days", "1"])
+    assert ret == 0
+
+
 # ---------------------------------------------------------------------------
 # org-growth-projection
 # ---------------------------------------------------------------------------
