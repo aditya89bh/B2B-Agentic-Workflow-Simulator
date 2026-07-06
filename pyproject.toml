@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "b2b_workflow_simulator"
-version = "0.1.0"
-description = "A digital twin simulator for comparing human, AI-agent, and hybrid B2B workflows before implementation."
+version = "1.0.0"
+description = "Simulate and compare human, AI-agent, and hybrid B2B workflows before implementation. Includes scenario library, org digital twin, consultant packet export, and scenario customization."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -16,9 +16,14 @@ keywords = [
     "digital-twin",
     "process-optimization",
     "roi-analysis",
+    "consulting",
+    "scenario-library",
+    "business-transformation",
+    "ai-transformation",
+    "operations",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Other Audience",
     "License :: OSI Approved :: MIT License",
@@ -33,12 +38,15 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.4", "build>=1.0"]
+docs = ["mkdocs>=1.5", "mkdocs-material>=9.0"]
 
 [project.scripts]
 b2b-simulator = "b2b_workflow_simulator.cli:main"
 
 [project.urls]
 Repository = "https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator"
+Documentation = "https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator/tree/main/docs"
+Changelog = "https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
