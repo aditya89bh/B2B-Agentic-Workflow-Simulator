@@ -14,8 +14,8 @@ transformations:
 6. **AI readiness** — How prepared is the org to adopt AI agents?
 7. **Single points of failure** — Does the org rely on actors with no
    backup?
-8. **Cross-team dependency load** — How many workflows span multiple
-   teams, creating coordination overhead?
+8. **Workflow concentration risk** — Are workflows spread across teams,
+   or concentrated in a few creating coordination bottlenecks?
 
 Each dimension produces a 0-100 score where **higher is healthier**.
 The overall health score is the weighted average.  A grade is derived
@@ -60,7 +60,7 @@ HEALTH_FACTOR_LABELS: dict[str, str] = {
     SLA_RISK: "SLA Risk",
     AI_READINESS: "AI Readiness",
     SINGLE_POINT_OF_FAILURE: "Single Points of Failure",
-    CROSS_TEAM_DEPENDENCY: "Cross-Team Dependency Load",
+    CROSS_TEAM_DEPENDENCY: "Workflow Concentration Risk",
 }
 
 _FACTOR_WEIGHTS: dict[str, float] = {
@@ -258,41 +258,62 @@ def _ai_readiness_score(org: Organization, kpi_results: dict[str, KPIResult]) ->
     return score, explanation
 
 
+_SPOF_UTILIZATION_THRESHOLD = 0.8
+_SINGLE_ROLE_DEPT_PENALTY = 15.0
+
+
 def _spof_score(org: Organization, kpi_results: dict[str, KPIResult]) -> tuple[float, str]:
     """Score 0-100: inverse of single-point-of-failure exposure.
 
-    A SPOF actor is one with no peer (only one actor covers a node
-    across all workflows) AND high utilization.
+    Combines two signals:
+    - Actor utilization: actors with >80% utilization are potential SPOFs.
+    - Org structure: departments with only one role have no backup coverage.
     """
     all_actor_utils: dict[str, float] = {}
     for kpi in kpi_results.values():
         for actor_id, util in kpi.actor_utilization.items():
             all_actor_utils[actor_id] = max(all_actor_utils.get(actor_id, 0.0), util)
 
-    spof_count = sum(1 for u in all_actor_utils.values() if u > 0.8)
+    spof_count = sum(1 for u in all_actor_utils.values() if u > _SPOF_UTILIZATION_THRESHOLD)
     total = len(all_actor_utils)
-    if total == 0:
-        return 80.0, "No utilization data available; default score applied."
-    spof_fraction = spof_count / total
-    score = max(0.0, 100.0 - spof_fraction * 150.0)
+
+    single_role_depts = sum(
+        1
+        for dept_id in org.departments
+        if org.department_headcount(dept_id) == 1
+    )
+    n_depts = len(org.departments)
+
+    if total == 0 and n_depts == 0:
+        return 80.0, "No utilization or org structure data available; default score applied."
+
+    util_penalty = (spof_count / max(total, 1)) * 80.0
+    dept_penalty = (single_role_depts / max(n_depts, 1)) * _SINGLE_ROLE_DEPT_PENALTY
+    score = max(0.0, 100.0 - util_penalty - dept_penalty)
     explanation = (
-        f"{spof_count}/{total} actor(s) have >80% utilization and represent "
-        "potential single points of failure."
+        f"{spof_count}/{max(total, 0)} actor(s) above {_SPOF_UTILIZATION_THRESHOLD:.0%} "
+        f"utilization; {single_role_depts}/{n_depts} dept(s) have single-role coverage."
     )
     return score, explanation
 
 
 def _cross_team_dependency_score(org: Organization) -> tuple[float, str]:
-    """Score 0-100: lower dependency load between teams is healthier."""
+    """Score 0-100: measures workflow concentration across teams (higher = better spread).
+
+    A lower score indicates many workflows concentrated in few teams, which
+    creates coordination bottlenecks.  The metric is ``n_workflows / n_teams``
+    (workflows per team): close to 1.0 is ideal; above 2.0 indicates
+    concentration risk.
+    """
     n_teams = len(org.teams)
     n_workflows = len(org.workflow_ids)
     if n_teams == 0 or n_workflows == 0:
-        return 80.0, "No cross-team dependency data available; default score applied."
-    team_per_workflow = n_workflows / max(n_teams, 1)
-    score = min(100.0, max(0.0, 100.0 - (team_per_workflow - 1.0) * 20.0))
+        return 80.0, "No workflow/team data available; default score applied."
+    workflows_per_team = n_workflows / max(n_teams, 1)
+    score = min(100.0, max(0.0, 100.0 - (workflows_per_team - 1.0) * 20.0))
     explanation = (
-        f"{n_workflows} workflow(s) span {n_teams} team(s) "
-        f"({team_per_workflow:.1f} workflows/team on average)."
+        f"{n_workflows} workflow(s) across {n_teams} team(s) "
+        f"({workflows_per_team:.1f} workflows/team; target ≤1.0)."
     )
     return score, explanation
 
