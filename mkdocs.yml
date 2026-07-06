@@ -1,0 +1,51 @@
+site_name: B2B Agentic Workflow Simulator
+site_description: Simulate AI transformation. Measure ROI. Generate consulting deliverables.
+site_url: https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator
+repo_url: https://github.com/aditya89bh/B2B-Agentic-Workflow-Simulator
+repo_name: aditya89bh/B2B-Agentic-Workflow-Simulator
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+  palette:
+    scheme: default
+    primary: blue
+    accent: indigo
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quickstart: quickstart.md
+    - Concepts: concepts.md
+    - Walkthrough: walkthrough.md
+  - Scenario Library:
+    - Overview: scenario_library.md
+    - Case Studies: industry_case_studies.md
+    - Assumptions Guide: scenario_assumptions.md
+  - Customization:
+    - Scenario Customization: scenario_customization.md
+    - Calibration Workflow: calibration_workflow.md
+    - Config Schema: config_schema.md
+  - Outputs:
+    - Consultant Outputs: consultant_outputs.md
+    - Examples Gallery: examples_gallery.md
+  - CLI Reference: cli_reference.md
+  - API Reference: api_reference.md
+  - Architecture: architecture.md
+  - Release Notes: release_notes.md
+  - Limitations: limitations.md
+  - Contributing: contributing.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - tables
+  - toc:
+      permalink: true
+
+strict: true
