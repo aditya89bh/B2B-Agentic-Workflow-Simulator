@@ -62,6 +62,11 @@ class GrowthConfig:
         actor_capacity_per_head: Available minutes per person per day.
         simulation_days_per_month: Working days per month used for
             capacity calculations.
+        initial_ai_adoption: Starting AI adoption level (0.0-1.0).
+            When ``None`` (default), ``project_growth`` derives this
+            automatically from ``org.ai_agent_count() / org.total_headcount()``,
+            so an organization already 30% AI-staffed begins the projection
+            at 0.30 rather than 0.0.  Set explicitly to override.
     """
 
     monthly_growth_rate: float = 0.05
@@ -74,8 +79,14 @@ class GrowthConfig:
     base_headcount: int = 10
     actor_capacity_per_head: float = 480.0
     simulation_days_per_month: int = 22
+    initial_ai_adoption: float | None = None
 
     def __post_init__(self) -> None:
+        if self.initial_ai_adoption is not None and not (0.0 <= self.initial_ai_adoption <= 1.0):
+            raise ValueError(
+                f"initial_ai_adoption must be between 0.0 and 1.0, "
+                f"got {self.initial_ai_adoption}"
+            )
         if len(self.seasonal_multipliers) != 12:
             raise ValueError(
                 f"seasonal_multipliers must have exactly 12 values, "
@@ -199,6 +210,15 @@ def project_growth(
     else:
         base_monthly_budget = config.base_cost_per_case * config.base_cases_per_month
 
+    # Derive starting AI adoption from org structure when not explicitly configured.
+    if config.initial_ai_adoption is not None:
+        base_ai_adoption = config.initial_ai_adoption
+    else:
+        headcount = org.total_headcount()
+        base_ai_adoption = (
+            org.ai_agent_count() / headcount if headcount > 0 else 0.0
+        )
+
     points: list[GrowthProjectionPoint] = []
     for i in range(12):
         month = i + 1
@@ -212,7 +232,7 @@ def project_growth(
             headcount * config.actor_capacity_per_head * config.simulation_days_per_month
         )
 
-        ai_adoption = min(1.0, config.ai_adoption_increase_rate * i)
+        ai_adoption = min(1.0, base_ai_adoption + config.ai_adoption_increase_rate * i)
         effective_cost_per_case = cost_per_case * (1.0 - ai_adoption * _AI_COST_REDUCTION_PER_UNIT)
         projected_cost = projected_cases * effective_cost_per_case
 
