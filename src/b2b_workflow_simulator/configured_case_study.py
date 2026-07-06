@@ -254,8 +254,8 @@ def generate_configured_case_study(
     )
 
     # Recommendations
-    from b2b_workflow_simulator.packet import _build_recommendations_txt
-    write("recommendations.txt", _build_recommendations_txt(before_kpi, after_kpi))
+    from b2b_workflow_simulator.packet import build_recommendations_text
+    write("recommendations.txt", build_recommendations_text(before_kpi, after_kpi))
 
     # README
     write("README.md", configured_case_study_readme(config, diff, before_kpi, after_kpi))
