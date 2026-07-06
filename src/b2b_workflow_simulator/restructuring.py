@@ -161,6 +161,38 @@ def _avg_cycle_time(kpi_results: dict[str, KPIResult]) -> float:
     return weighted / total_cases
 
 
+def _org_scale_factors(org: Organization) -> dict:
+    """Derive org-structure scale factors used to adjust scenario heuristics.
+
+    Returns a dict with the following keys:
+
+    - ``headcount``: total role count.
+    - ``n_depts``: number of departments.
+    - ``n_teams``: number of teams.
+    - ``ai_fraction``: AI agents as a fraction of total headcount (0–1).
+    - ``manager_ratio``: managers as a fraction of total headcount (0–1).
+    - ``size_multiplier``: a 0.5–2.0 scalar; larger orgs benefit more from
+      centralization and shared-services but face higher disruption cost.
+    - ``ai_readiness``: 0–1; orgs already high in AI see diminishing returns
+      from adding AI ops capacity.
+    """
+    headcount = max(org.total_headcount(), 1)
+    n_depts = max(len(org.departments), 1)
+    n_teams = max(len(org.teams), 1)
+    ai_fraction = org.ai_agent_count() / headcount
+    manager_ratio = org.manager_count() / headcount
+    size_multiplier = min(2.0, max(0.5, headcount / 10.0))
+    return {
+        "headcount": headcount,
+        "n_depts": n_depts,
+        "n_teams": n_teams,
+        "ai_fraction": ai_fraction,
+        "manager_ratio": manager_ratio,
+        "size_multiplier": size_multiplier,
+        "ai_readiness": ai_fraction,
+    }
+
+
 def evaluate_restructuring(
     org: Organization,
     base_kpi_results: dict[str, KPIResult],
@@ -169,13 +201,18 @@ def evaluate_restructuring(
 ) -> RestructuringImpact:
     """Evaluate one restructuring scenario and return its projected impact.
 
-    The evaluation applies directional heuristics anchored to the
-    current baseline KPIs and org structure.  All estimates carry
-    inherent uncertainty and should be treated as directional signals,
-    not precise forecasts.
+    The evaluation applies directional heuristics anchored to both the
+    current baseline KPIs and the organization's structural characteristics
+    (headcount, department count, AI adoption level, manager ratio).  Larger
+    organizations benefit more from centralization and shared services;
+    orgs already high in AI see diminishing returns from additional AI ops
+    investment.  All estimates carry inherent uncertainty and should be
+    treated as directional signals, not precise forecasts.
 
     Args:
-        org: The current organization model.
+        org: The current organization model.  Structural properties
+            (headcount, department count, AI agent fraction, manager
+            ratio) scale the heuristic estimates.
         base_kpi_results: Baseline KPI results keyed by workflow ID.
         scenario: The restructuring option to evaluate.
         org_budget: Optional budget model; used for budget impact
@@ -189,18 +226,27 @@ def evaluate_restructuring(
     avg_ct = _avg_cycle_time(base_kpi_results)
     total_budget = org_budget.total_budget if org_budget else annual_cost
 
+    scale = _org_scale_factors(org)
+    size_mult = scale["size_multiplier"]
+    ai_frac = scale["ai_fraction"]
+    n_depts = scale["n_depts"]
+    n_teams = scale["n_teams"]
+    headcount = scale["headcount"]
+
     if scenario.scenario_type == CENTRALIZE_TEAM:
-        cost_fraction = float(params.get("cost_reduction_fraction", 0.08))
+        # Larger orgs (more teams/depts) have more duplication to eliminate
+        dept_bonus = min(0.06, (n_depts - 1) * 0.01)
+        cost_fraction = float(params.get("cost_reduction_fraction", 0.08)) + dept_bonus
         ct_fraction = float(params.get("cycle_time_reduction_fraction", 0.05))
-        headcount_delta = int(params.get("headcount_delta", -1))
-        cost_impact = -annual_cost * cost_fraction
+        headcount_delta = int(params.get("headcount_delta", max(-1, -(n_teams // 3))))
+        cost_impact = -annual_cost * cost_fraction * size_mult
         ct_impact = -avg_ct * ct_fraction
         risk_delta = -5.0
         budget_impact = cost_impact
         summary = (
-            f"Centralizing the team is projected to reduce annual cost by "
-            f"~{cost_fraction:.0%} and cut average cycle time by "
-            f"~{ct_fraction:.0%} through reduced duplication."
+            f"Centralizing {n_teams} team(s) across {n_depts} department(s) is projected "
+            f"to reduce annual cost by ~{cost_fraction:.0%} and cut average cycle time by "
+            f"~{ct_fraction:.0%} through reduced duplication ({headcount_delta:+d} net headcount)."
         )
         recs = [
             "Identify duplicated roles across distributed teams before consolidating.",
@@ -209,15 +255,17 @@ def evaluate_restructuring(
 
     elif scenario.scenario_type == DECENTRALIZE_TEAM:
         ct_fraction = float(params.get("cycle_time_reduction_fraction", 0.12))
-        headcount_delta = int(params.get("headcount_delta", 2))
-        cost_impact = annual_cost * 0.05
+        # Smaller orgs benefit more from embedding specialists close to the work
+        ct_fraction = ct_fraction * min(1.5, 1.0 / max(size_mult, 0.5))
+        headcount_delta = int(params.get("headcount_delta", max(1, n_depts - 1)))
+        cost_impact = annual_cost * 0.05 * size_mult
         ct_impact = -avg_ct * ct_fraction
         risk_delta = 3.0
         budget_impact = cost_impact
         summary = (
             "Decentralizing the team is projected to reduce cycle time by "
-            f"~{ct_fraction:.0%} by embedding specialists closer to the work, "
-            "at the cost of slightly higher overhead."
+            f"~{ct_fraction:.0%} by embedding specialists closer to the work "
+            f"(+{headcount_delta} net headcount), at the cost of slightly higher overhead."
         )
         recs = [
             "Establish clear service standards to prevent quality divergence.",
@@ -225,16 +273,18 @@ def evaluate_restructuring(
         ]
 
     elif scenario.scenario_type == ADD_SHARED_SERVICES:
-        cost_fraction = float(params.get("cost_reduction_fraction", 0.10))
+        # More departments = more potential duplication to consolidate
+        default_fraction = min(0.18, 0.06 + n_depts * 0.02)
+        cost_fraction = float(params.get("cost_reduction_fraction", default_fraction))
         headcount_delta = int(params.get("headcount_delta", 1))
         cost_impact = -annual_cost * cost_fraction
         ct_impact = avg_ct * 0.05
         risk_delta = -8.0
         budget_impact = -total_budget * 0.05
         summary = (
-            "A shared-services function consolidates repetitive tasks, reducing "
-            f"operating cost by ~{cost_fraction:.0%} while adding a modest "
-            "coordination overhead to cycle time."
+            f"A shared-services function for {n_depts} departments consolidates "
+            f"repetitive tasks, reducing operating cost by ~{cost_fraction:.0%} while "
+            "adding a modest coordination overhead to cycle time."
         )
         recs = [
             "Define a clear SLA between the shared-services function and consuming teams.",
@@ -248,7 +298,8 @@ def evaluate_restructuring(
         cost_impact = outsource_annual - annual_cost * 0.15
         headcount_delta = int(params.get("headcount_delta", -2))
         ct_impact = -avg_ct * float(params.get("cycle_time_reduction_fraction", 0.08))
-        risk_delta = 10.0
+        # Larger orgs face greater compliance risk when outsourcing
+        risk_delta = 10.0 + (n_depts - 1) * 1.0
         budget_impact = cost_impact
         summary = (
             "Outsourcing the stage transfers execution risk to a third party and "
@@ -262,17 +313,19 @@ def evaluate_restructuring(
         ]
 
     elif scenario.scenario_type == CREATE_AI_OPS_TEAM:
-        cost_fraction = float(params.get("cost_reduction_fraction", 0.15))
-        ct_fraction = float(params.get("cycle_time_reduction_fraction", 0.20))
+        # Diminishing returns for orgs already high in AI adoption
+        ai_discount = max(0.4, 1.0 - ai_frac * 1.5)
+        cost_fraction = float(params.get("cost_reduction_fraction", 0.15)) * ai_discount
+        ct_fraction = float(params.get("cycle_time_reduction_fraction", 0.20)) * ai_discount
         headcount_delta = int(params.get("headcount_delta", 2))
         cost_impact = -annual_cost * cost_fraction
         ct_impact = -avg_ct * ct_fraction
-        risk_delta = -12.0
+        risk_delta = -12.0 * ai_discount
         budget_impact = -total_budget * 0.08
         summary = (
-            "A dedicated AI Operations team accelerates automation adoption, "
-            f"projected to cut cost by ~{cost_fraction:.0%} and cycle time "
-            f"by ~{ct_fraction:.0%} within 12 months."
+            f"A dedicated AI Operations team (org currently {ai_frac:.0%} AI-staffed) "
+            f"is projected to cut cost by ~{cost_fraction:.0%} and cycle time by "
+            f"~{ct_fraction:.0%} within 12 months."
         )
         recs = [
             "Staff the team with at least one ML engineer and one process specialist.",
@@ -287,12 +340,12 @@ def evaluate_restructuring(
         hire_annual_cost = headcount_delta * hourly_cost * 8 * 22 * 12
         cost_impact = hire_annual_cost
         ct_impact = -avg_ct * ct_fraction
-        risk_delta = -7.0
+        # Lower risk delta for already-large orgs (redundancy already exists)
+        risk_delta = -7.0 * min(1.0, 5.0 / max(headcount, 1))
         budget_impact = hire_annual_cost
         summary = (
-            f"Adding {headcount_delta} staff member(s) is projected to reduce "
-            f"average cycle time by ~{ct_fraction:.0%} by relieving the current "
-            "bottleneck, at a direct hiring cost."
+            f"Adding {headcount_delta} staff member(s) to the existing {headcount}-person org "
+            f"is projected to reduce average cycle time by ~{ct_fraction:.0%}."
         )
         recs = [
             "Identify the highest-utilization actor/role before creating job reqs.",
@@ -305,12 +358,14 @@ def evaluate_restructuring(
         headcount_delta = -layers_removed
         cost_impact = -annual_cost * ct_fraction * 0.5
         ct_impact = -avg_ct * ct_fraction
-        risk_delta = 5.0 * layers_removed
+        # More manager layers = more risk when removing approvals
+        # Scale risk with manager ratio; use 1.0 floor so risk is always positive
+        risk_delta = 5.0 * layers_removed * max(1.0, scale["manager_ratio"] * 10.0)
         budget_impact = cost_impact
         summary = (
-            f"Removing {layers_removed} approval layer(s) cuts average cycle time by "
-            f"~{ct_fraction:.0%} and frees approver capacity, but increases "
-            "process risk proportionally."
+            f"Removing {layers_removed} approval layer(s) from an org with "
+            f"{scale['manager_ratio']:.0%} manager ratio cuts average cycle time by "
+            f"~{ct_fraction:.0%}, with process risk scaling with manager density."
         )
         recs = [
             "Replace removed approvals with automated policy checks where possible.",
